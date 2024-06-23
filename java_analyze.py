@@ -13,37 +13,6 @@ from datasets import load_dataset
 import csv
 from collections import defaultdict
 
-# TODO: check all patterns with real data
-
-# Sample data stream
-"""data_stream = [
-    {
-        'code': "print('hello world')\nobject.select",
-        'repo_name': 'MirekSz/repo1',
-        'path': 'app/mods/mod190.py',
-        'language': 'Python',
-        'license': 'isc',
-        'size': 73
-    },
-    {
-        'code': "SELECT * FROM internet;",
-        'repo_name': 'MirekSz/repo2',
-        'path': 'app/mods/mod190.js',
-        'language': 'JavaScript',
-        'license': 'isc',
-        'size': 73
-    },
-    {
-        'code': "executeQuery('SELECT * FROM internet;'",
-        'repo_name': 'MirekSz/repo1',
-        'path': 'app/mods/mod2000.js',
-        'language': 'JavaScript',
-        'license': 'isc',
-        'size': 73
-    }
-]
-"""
-
 # online:
 # data_stream = load_dataset("codeparrot/github-code", trust_remote_code=True, streaming=False, split='train', filter_languages=True, languages=["Julia"])
 
@@ -60,31 +29,28 @@ data_stream = load_dataset("codeparrot/github-code", data_files="data/train-0*-o
 
 # Define regex patterns for different querying methods
 patterns = {
-    'Raw SQL': r'createStatement\s*\(|prepareStatement\s*\(|executeQuery\s*\(',
-    'Hibernate': r'createQuery\s*\(|createCriteria\s*\(',
-    'JPA': r'EntityManager\s*\.\s*(createQuery|createNamedQuery|createNativeQuery|createStoredProcedureQuery)\s*\(',
-    'jOOQ': r'DSL\.select\s*\(|DSL\.insert\s*\(|DSL\.update\s*\(|DSL\.delete\s*\(',
-    'MyBatis': r'@Select\s*\(|@Insert\s*\(|@Update\s*\(|@Delete\s*\(',
-    'Spring Data JPA': r'findBy\s*\(|queryBy\s*\(',
-    'QueryDSL': r'JPAQueryFactory\s*\.\s*',
-    'JdbcTemplate': r'JdbcTemplate\s*\.\s*(query|update|execute)\s*\(',
-    'Ebean ORM': r'find\s*\(|query\s*\(',
-    'Criteria API (JPA)': r'CriteriaBuilder\s*\.\s*',
-    'Spring JDBC Template': r'jdbcTemplate\s*\.\s*(query|update|execute)\s*\(',
-    'Apache Cayenne': r'ObjectSelect\.query\s*\(|SQLTemplate\.query\s*\(',
-    'OpenJPA': r'EntityManager\s*\.\s*(createQuery|createNamedQuery|createNativeQuery|createStoredProcedureQuery)\s*\(',
-    'ObjectDB': r'EntityManager\s*\.\s*(createQuery|createNamedQuery|createNativeQuery|createStoredProcedureQuery)\s*\(',
-    'EclipseLink': r'Session\s*\.\s*(executeQuery|createQuery|createNamedQuery)\s*\(',
-    'Slick (Scala)': r'Slick\.\s*',
-    'JOOQ': r'DSLContext\s*\.\s*(select|insert|update|delete)\s*\(',
-    'Batoo JPA': r'EntityManager\s*\.\s*(createQuery|createNamedQuery|createNativeQuery|createStoredProcedureQuery)\s*\(',
-    'Speedment': r'Speedment\s*\.\s*',
-    'OrientDB': r'OrientDB\s*\.\s*',
-    'ArangoDB': r'ArangoDatabase\s*\.\s*',
-    'Elasticsearch': r'Elasticsearch\s*\.\s*',
-    'MongoDB': r'MongoCollection\s*\.\s*',
-    'Neo4j': r'Neo4j\s*\.\s*',
-    'Cassandra': r'Cassandra\s*\.\s*',
+    'Raw SQL': r'import\s+java\.sql\.(Connection|DriverManager|Statement|PreparedStatement|ResultSet);',
+    'Hibernate': r'import\s+org\.hibernate\.(Session|SessionFactory|query\.Query|cfg\.Configuration|Criteria);',
+    'JPA': r'import\s+javax\.persistence\.(EntityManager|PersistenceContext|Query|TypedQuery|NamedQuery|Entity|Table|Id|Column);',
+    'jOOQ': r'import\s+org\.jooq\.(DSLContext|impl\.DSL|Record|Result);',
+    'MyBatis': r'import\s+org\.apache\.ibatis\.(annotations\.Select|annotations\.Insert|annotations\.Update|annotations\.Delete);',
+    'Spring Data JPA': r'import\s+org\.springframework\.data\.jpa\.(repository\.JpaRepository|repository\.Query);',
+    'QueryDSL': r'import\s+com\.querydsl\.jpa\.impl\.JPAQueryFactory;',
+    'JdbcTemplate': r'import\s+org\.springframework\.jdbc\.core\.JdbcTemplate;',
+    'Ebean ORM': r'import\s+io\.ebean\.(Ebean|Query|Server);',
+    'Criteria API (JPA)': r'import\s+javax\.persistence\.criteria\.(CriteriaBuilder|CriteriaQuery|Root);',
+    'Spring JDBC Template': r'import\s+org\.springframework\.jdbc\.core\.JdbcTemplate;',
+    'Apache Cayenne': r'import\s+org\.apache\.cayenne\.(ObjectSelect|SQLTemplate);',
+    'OpenJPA': r'import\s+org\.apache\.openjpa\.(persistence\.EntityManager|persistence\.PersistenceContext|persistence\.Query|persistence\.TypedQuery|persistence\.NamedQuery);',
+    'Redis': r'import\s+redis\.clients\.jedis\.(Jedis|JedisPool);',
+    'MongoDB': r'import\s+com\.mongodb\.(MongoClient|MongoDatabase|MongoCollection);',
+    'Cassandra': r'import\s+com\.datastax\.driver\.core\.(Cluster|Session);',
+    'Neo4J': r'import\s+org\.neo4j\.driver\.(Driver|Session|Transaction);',
+    'ObjectDB': r'import\s+com\.objectdb\.ojb\.(ObjectContainer|Query|Extent);',
+    'EclipseLink': r'import\s+org\.eclipse\.persistence\.(sessions\.Session|queries\.Query|jpa\.EntityManager);',
+    'Batoo JPA': r'import\s+org\.batoo\.jpa\.(EntityManager|Persistence|Query);',
+    'Speedment': r'import\s+com\.speedment\.(Speedment|config\.db\.tables\.Table|runtime\.core\.Application);',
+    'OrientDB': r'import\s+com\.orientechnologies\.orient\.(core\.db\.ODatabaseSession|core\.query\.OQuery);'
 }
 
 # File path for CSV output
@@ -146,18 +112,15 @@ for obj in data_stream:
             'Spring JDBC Template': 0,
             'Apache Cayenne': 0,
             'OpenJPA': 0,
+            'Redis': 0,
+            'MongoDB': 0,
+            'Cassandra': 0,
+            'Neo4J': 0,
             'ObjectDB': 0,
             'EclipseLink': 0,
-            'Slick (Scala)': 0,
-            'JOOQ': 0,
             'Batoo JPA': 0,
             'Speedment': 0,
             'OrientDB': 0,
-            'ArangoDB': 0,
-            'Elasticsearch': 0,
-            'MongoDB': 0,
-            'Neo4j': 0,
-            'Cassandra': 0,
         }
     
     # Update the repository information
