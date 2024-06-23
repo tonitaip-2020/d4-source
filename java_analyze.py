@@ -7,23 +7,10 @@ import logging
 
 import datasets
 from datasets import load_dataset
-# >>> datasets.__version__
-# '2.18.0'
 
 import csv
 from collections import defaultdict
 
-# online:
-# data_stream = load_dataset("codeparrot/github-code", trust_remote_code=True, streaming=False, split='train', filter_languages=True, languages=["Julia"])
-
-# offline, works(?), slow
-# data_stream = load_dataset("codeparrot/github-code", data_files="data/train-0*-of-01126.parquet",trust_remote_code=True, streaming=False, split='train', filter_languages=True, languages=["Julia"])
-
-# offline, works 10x faster with num_proc=12 than with default, fails after split gen (typeError):
-# data_stream = load_dataset("codeparrot/github-code", data_files="data/train-0*-of-01126.parquet", filter_languages=True, languages=["Julia"], num_proc=12)
-
-# generating examples takes as much time as there are files in the Language
-# 1000 items = 10 sec.
 # offline, works after generation:
 data_stream = load_dataset("codeparrot/github-code", data_files="data/train-0*-of-01126.parquet", split='train', filter_languages=True, languages=["Java"], num_proc=12)
 
@@ -133,13 +120,15 @@ for obj in data_stream:
     
     # Write all repository information to the CSV file after each update
     write_all_repo_data()
-
+    
+    # TODO: remove these
     count += 1
     if count % 10000 == 0:
       left = 19548190 - count
       per = 100 - count / 19548190 * 100
       print("STAT: There are about ", left, " files left (", per, ").")
       print(count, ": Wrote to .csv file. Latest from ", repo_name, ".")
+      
     next(iter(data_stream))
 
 print("END: Data has been written to ", csv_file_path, " incrementally.")
