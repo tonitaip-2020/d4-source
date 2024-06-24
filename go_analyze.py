@@ -1,4 +1,5 @@
 import re
+import glob
 import os
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 
@@ -10,6 +11,15 @@ from datasets import load_dataset
 
 import csv
 from collections import defaultdict
+
+# Define regex patterns for different types of joins
+join_patterns = [
+    r'\bJOIN\b',                  # General JOIN keyword
+    r'\bNATURAL JOIN\b',          # NATURAL JOIN
+    r'\bEXISTS\s*\(.*?\)',        # EXISTS + subquery
+    r'\bIN\s*\(.*?\)',            # IN + subquery
+    r'WHERE\b(?:[^\n]*\n?)*?(\b\w+\.\w+\s*=\s*\w+\.\w+\b)'  # Explicit joins in WHERE clause (a bit tricky and not always accurate)
+]
 
 # offline, works after generation:
 data_stream = load_dataset("codeparrot/github-code", data_files="data/train-0*-of-01126.parquet", split='train', filter_languages=True, languages=["Go"], num_proc=12)
