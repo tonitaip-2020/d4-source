@@ -1,10 +1,8 @@
 import re
-import glob
+import datetime
+import time
 import os
 os.environ["HF_DATASETS_OFFLINE"] = "1"
-
-import logging
-# logging.basicConfig(level=logging.DEBUG)
 
 import datasets
 from datasets import load_dataset
@@ -12,49 +10,27 @@ from datasets import load_dataset
 import csv
 from collections import defaultdict
 
-# Define regex patterns for different types of joins
-join_patterns = [
-    r'\bJOIN\b',                  # General JOIN keyword
-    r'\bNATURAL JOIN\b',          # NATURAL JOIN
-    r'\bEXISTS\s*\(.*?\)',        # EXISTS + subquery
-    r'\bIN\s*\(.*?\)',            # IN + subquery
-    r'WHERE\b(?:[^\n]*\n?)*?(\b\w+\.\w+\s*=\s*\w+\.\w+\b)'  # Explicit joins in WHERE clause (a bit tricky and not always accurate)
-]
-
-# offline, works after generation:
-data_stream = load_dataset("codeparrot/github-code", data_files="data/train-0*-of-01126.parquet", split='train', filter_languages=True, languages=["Go"], num_proc=12)
-
 # Define regex patterns for different querying methods
 patterns = {
-    'Raw SQL': r'import\s+\(\s*"database/sql"\s*\)|import\s+"database/sql"|import\s+"go\-pg";',
-    'GORM/GORM2': r'import\s+\(\s*"github\.com/jinzhu/gorm"\s*\)|import\s+"github\.com/jinzhu/gorm"|import\s+"gorm\.io";',
-    'xorm': r'import\s+\(\s*"github\.com/go-xorm/xorm"\s*\)|import\s+"github\.com/go-xorm/xorm";',
+    'Raw SQL': r'(database/sql)|(go\-pg)',
+    'GORM/GORM2': r'gorm\.io',
+    'xorm': r'xorm',
     'upper': r'upper\.io',
     'qbs' : r'vattle\/qbs',
-    'sqlx': r'import\s+\(\s*"github\.com/jmoiron/sqlx"\s*\)|import\s+"github\.com/jmoiron/sqlx";',
+    'sqlx': r'sqlx',
     'pgx': r'jackkc\/pgx',
     'dbr': r'gocraft\/dbr',
     'gorp': r'gopkg\.in',
-    'entgo': r'import\s+\(\s*"entgo\.io/ent"\s*\)|import\s+"entgo\.io/ent";',
-    'Redis': r'import\s+\(\s*"github\.com/go-redis/redis/v8"\s*\)|import\s+"github\.com/go-redis/redis/v8";',
-    'MongoDB': r'import\s+\(\s*"go\.mongodb\.org/mongo-driver/mongo"\s*\)|import\s+"go\.mongodb\.org/mongo-driver/mongo";',
-    'Cassandra': r'import\s+\(\s*"github\.com/gocql/gocql"\s*\)|import\s+"github\.com/gocql/gocql";',
-    'Neo4J': r'import\s+\(\s*"github\.com/neo4j/neo4j-go-driver/v4"\s*\)|import\s+"github\.com/neo4j/neo4j-go-driver/v4";',
-    'OrientDB': r'import\s+\(\s*"github\.com/istreamdata/orientgo"\s*\)|import\s+"github\.com/istreamdata/orientgo";',
+    'entgo': r'entgo\.io',
+    'Redis': r'go\-redis',
+    'MongoDB': r'(mongodb\.org)|(go\.mongodb)|(mongo\-driver)',
+    'Cassandra': r'gocql',
+    'Neo4J': r'neo4j\-go\-driver',
+    'OrientDB': r'orientgo',
 }
 
 # File path for CSV output
 csv_file_path = 'go.csv'
-
-# Write header to CSV file
-with open(csv_file_path, mode='w', newline='') as csv_file:
-    fieldnames = ['repo_name', 'num_files', 'languages'] + list(patterns.keys())
-    writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-    writer.writeheader()
-
-# Dictionary to store aggregated information per repository
-repo_info = {}
-count = 0
 
 # Initialize CSV file and write the header if the file doesn't exist
 if not os.path.exists(csv_file_path):
@@ -63,19 +39,28 @@ if not os.path.exists(csv_file_path):
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
 
-# Function to write all repository data to the CSV file
+# Dictionary to store aggregated information per repository
+repo_info = {}
+count = 0
+job_start_time = datetime.datetime.now()
+loop_start_time = datetime.datetime.now()
+
+# Function to write repositories with non-zero values to the CSV file
 def write_all_repo_data():
-    with open(csv_file_path, mode='w', newline='') as csv_file:
+    with open(csv_file_path, mode='a', newline='') as csv_file:
         fieldnames = ['repo_name', 'num_files', 'languages'] + list(patterns.keys())
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        writer.writeheader()
         for repo_name, info in repo_info.items():
-            writer.writerow({
-                'repo_name': repo_name,
-                'num_files': info['num_files'],
-                'languages': ', '.join(info['languages']),
-                **{method: info[method] for method in patterns.keys()}
-            })
+            if any(info[method] > 0 for method in patterns.keys()):
+                writer.writerow({
+                    'repo_name': repo_name,
+                    'num_files': info['num_files'],
+                    'languages': ', '.join(info['languages']),
+                    **{method: info[method] for method in patterns.keys()}
+                })
+
+# Offline, works after generation:
+data_stream = load_dataset("codeparrot/github-code", data_files={'train': 'data/train-0*-of-01126.parquet'}, split='train', filter_languages=True, languages=["GO"], num_proc=24)
 
 # Process each data object in the stream
 for obj in data_stream:
@@ -114,17 +99,23 @@ for obj in data_stream:
     for method, pattern in patterns.items():
         repo_info[repo_name][method] += len(re.findall(pattern, code))
     
-    # Write all repository information to the CSV file after each update
-    write_all_repo_data()
-    
-    # TODO: remove these
+    # Periodically write to CSV and clear repo_info to manage memory usage
+    if len(repo_info) >= 1000:
+        write_all_repo_data()
+        repo_info = {}
+
     count += 1
     if count % 10000 == 0:
       left = 2265436 - count
-      per = 100 - count / 2265436 * 100
-      print("STAT: There are about ", left, " files left (", per, ").")
-      print(count, ": Wrote to .csv file. Latest from ", repo_name, ".")
-      
-    next(iter(data_stream))
+      per = round(100 - count / 2265436 * 100, 2)
+      loop_end_time = datetime.datetime.now()
+      loop_duration = loop_end_time - loop_start_time
+      formatted_duration = "{:.2f}".format(loop_duration.total_seconds())
+      print(f"STAT: {left} files left ({per}%). Running for {datetime.datetime.now() - job_start_time}.", end=" ")
+      print(f"This loop took {formatted_duration} seconds.")
+      loop_start_time = datetime.datetime.now()
+            
+# Write remaining data to CSV file
+write_all_repo_data()
 
-print("END: Data has been written to ", csv_file_path, " incrementally.")
+print("END: Data has been written to", csv_file_path, "incrementally.")
