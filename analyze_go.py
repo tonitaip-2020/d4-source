@@ -62,18 +62,6 @@ def write_all_repo_data():
 # Offline, works after generation:
 data_stream = load_dataset("codeparrot/github-code", data_files={'train': 'data/train-0*-of-01126.parquet'}, split='train', filter_languages=True, languages=["GO"], num_proc=24)
 
-# For printing statistics during execution:
-def print_stats(loop_start_time):
-    total = 2265436
-    left = f"{total - count:,}"
-    per = round(100 - count / total * 100, 2)
-    loop_end_time = datetime.datetime.now()
-    loop_duration = loop_end_time - loop_start_time
-    formatted_duration = "{:.2f}".format(loop_duration.total_seconds())
-    print(f"STAT: {left} files left ({per}%). Running for {datetime.datetime.now() - job_start_time}.", end=" ")
-    print(f"This loop took {formatted_duration} seconds.")
-    loop_start_time = datetime.datetime.now()
-
 # Process each data object in the stream
 for obj in data_stream:
     repo_name = obj['repo_name']
@@ -118,7 +106,15 @@ for obj in data_stream:
 
     count += 1
     if count % 10000 == 0:
-      print_stats(loop_start_time)
+        total = 2265436
+        left = f"{total - count:,}"
+        per = round(100 - count / total * 100, 2)
+        loop_end_time = datetime.datetime.now()
+        loop_duration = loop_end_time - loop_start_time
+        formatted_duration = "{:.2f}".format(loop_duration.total_seconds())
+        print(f"STAT: {left} files left ({per}%). Running for {datetime.datetime.now() - job_start_time}.", end=" ")
+        print(f"This loop took {formatted_duration} seconds.")
+        loop_start_time = datetime.datetime.now()
             
 # Write remaining data to CSV file
 write_all_repo_data()
