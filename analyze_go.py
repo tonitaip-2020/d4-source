@@ -63,7 +63,7 @@ def write_all_repo_data():
 data_stream = load_dataset("codeparrot/github-code", data_files={'train': 'data/train-0*-of-01126.parquet'}, split='train', filter_languages=True, languages=["GO"], num_proc=24)
 
 # For printing statistics during execution:
-def print_stats():
+def print_stats(loop_start_time):
     total = 2265436
     left = f"{total - count:,}"
     per = round(100 - count / total * 100, 2)
@@ -118,7 +118,7 @@ for obj in data_stream:
 
     count += 1
     if count % 10000 == 0:
-      print_stats()
+      print_stats(loop_start_time)
             
 # Write remaining data to CSV file
 write_all_repo_data()
