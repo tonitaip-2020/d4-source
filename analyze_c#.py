@@ -25,7 +25,6 @@ patterns = {
     'OrientDB': r'using\s+Orient\.Client',
     'RavenDB': r'using\s+Raven\.Client\.Documents',
     'LiteDB': r'using\s+LiteDB',
-    'SQLite': r'using\s+Microsoft\.Data\.Sqlite',
 }
 
 # File path for CSV output
@@ -86,7 +85,6 @@ for obj in data_stream:
             'OrientDB': 0,
             'RavenDB': 0,
             'LiteDB': 0,
-            'SQLite': 0,
         }
     
     # Update the repository information
