@@ -15,7 +15,7 @@ from collections import defaultdict
 patterns = {
     'Raw SQL': r'mysql_query|mysqli_query|pg_query|sqlite3_exec|oracle_query|oci_execute|SQLExecDirect|execSQL',
     'ODBC': r'SQLAllocHandle|SQLExecDirect|SQLPrepare|SQLBind',
-    'Berkeley DB': r'db|db_cxx',  
+    'Berkeley DB': r'db_cxx',  
     'LevelDB': r'leveldb|LevelDB|leveldb::DB', 
     'LMDB': r'lmdb\.h|lmdb',
     'Redis': r'redisConnect|redisCommand|Hiredis',
