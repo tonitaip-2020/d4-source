@@ -26,9 +26,8 @@ CREATE TABLE c_sharp (
 , entity_framework INT
 , dapper           INT
 , nhibernate       INT
-, servicestack     INT
 , ormlite          INT
-, linq             INT
+, linq             INT --check that these are right
 , mongodb          INT
 , redis            INT
 , cassandra        INT
