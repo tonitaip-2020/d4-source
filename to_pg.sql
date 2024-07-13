@@ -186,6 +186,7 @@ CREATE TABLE python (
 , mongoengine   INT
 , pymongo       INT
 , redis         INT
+, couchdb       INT
 , cassandra     INT
 , neo4j         INT
 , orientdb      INT
