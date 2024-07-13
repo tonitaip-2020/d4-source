@@ -86,6 +86,7 @@ for obj in data_stream:
             'MongoEngine': 0,
             'PyMongo': 0,
             'Redis': 0,
+            'CouchDB': 0,
             'Cassandra': 0,
             'Neo4J': 0,
             'OrientDB': 0,
