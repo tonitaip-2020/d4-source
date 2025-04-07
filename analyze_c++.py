@@ -10,38 +10,58 @@ from datasets import load_dataset
 import csv
 from collections import defaultdict
 
-# Regex word boundary "\b" makes the
+# C++: #include <x> / #include "x"
 # Define regex patterns for different querying methods
 patterns = {
-    'Raw SQL': r'mysql|mysqli|pg_query|sqlite3|oracle_query|occi\.h|sql\.h|libpq-fe',
-    'ODBC': r'odbc',
-    'Berkeley DB': r'db_cxx',  
-    'LevelDB': r'leveldb|LevelDB|leveldb::DB', 
-    'LMDB': r'lmdb\.h|lmdb',
-    'Redis': r'redisConnect|redisCommand|hiredis',
-    'MongoDB': r'mongoc\.h|mongocxx|MongoClient',
-    'Cassandra': r'cassandra\.h|CassSession',
-    'Neo4J': r'neo4j\.h|neo4j::Driver',
-    'OrientDB': r'orientdb|OrientDB',
-};
+    # Raw SQL: MySQL, MariaDB, PostgreSQL, SQLite, SQL Server, Oracle, Firebird
+    # ODBC
+    "RawSQL": r'#include\s*[<\"]\s*mysql|#include\s*[<\"]\s*pqxx|#include\s*[<\"]\s*pg_query|#include\s*[<\"]\s*mariadb|#include\s*[<\"]\s*sqlite|#include\s*[<\"]\s*oci|#include\s*[<\"]\s*sybfront|#include\s*[<\"]\s*sydb|#include\s*[<\"]\s*ibase|#include\s*[<\"]\s*oci|#include\s*[<\"]\s*odbc',
+
+    # NoSQL Databases
+    "Redis": r'#include\s*[<\"]\s*hiredis',
+    "MongoDB": r'#include\s*[<\"]\s*mongocxx',
+    "Cassandra": r'#include\s*[<\"]\s*cassandra',
+    "Neo4j": r'#include\s*[<\"]\s*neo4j-client',
+    "memcached": r'#include\s*[<\"]\s*memcached',
+
+    # Embedded Databases
+    "Berkeley DB": r'#include\s*[<\"]\s*db_cxx',
+    "Kyoto Cabinet": r'#include\s*[<\"]\s*kcdb',
+    "Tokyo Cabinet": r'#include\s*[<\"]\s*tcutil',
+    "UnQLite": r'#include\s*[<\"]\s*unqlite',
+    "GDBM": r'#include\s*[<\"]\s*gdbm',
+    "RocksDB": r'#include\s*[<\"]\s*rocksdb',
+    "LevelDB": r'#include\s*[<\"]\s*leveldb|#include\s*[<\"]\s*LevelDB',
+    "LMDB": r'#include\s*[<\"]\s*lmdb',
+    "FoundationDB": r'#include\s*[<\"]\s*fdb_c',
+    "HyperLevelDB": r'#include\s*[<\"]\s*hyperleveldb',
+
+    # ORM Libraries
+    "TinyORM": r'#include\s*[<\"]\s*TinyOrm',
+    "ODB": r'#include\s*[<\"]\s*odb/database',
+    "sqlpp11": r'#include\s*[<\"]\s*sqlpp11'
+
+    # Message Queues and Caching
+    # Out of scope for d4
+    #"RabbitMQ": r'#include\s*[<\"]\s*amqb',
+    #"ZeroMQ": r'#include\s*[<\"]\s*zmq',
+    #"Kafka": r'#include\s*[<\"]\s*rdkafka'
+}
 
 # File path for CSV output
 csv_file_path = 'c++.csv'
 
-# Initialize CSV file and write the header if the file doesn't exist
 if not os.path.exists(csv_file_path):
     with open(csv_file_path, mode='w', newline='') as csv_file:
         fieldnames = ['repo_name', 'num_files', 'languages'] + list(patterns.keys())
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
 
-# Dictionary to store aggregated information per repository
 repo_info = {}
 count = 0
 job_start_time = datetime.datetime.now()
 loop_start_time = datetime.datetime.now()
 
-# Function to write repositories with non-zero values to the CSV file
 def write_all_repo_data():
     with open(csv_file_path, mode='a', newline='') as csv_file:
         fieldnames = ['repo_name', 'num_files', 'languages'] + list(patterns.keys())
@@ -55,42 +75,26 @@ def write_all_repo_data():
                     **{method: info[method] for method in patterns.keys()}
                 })
 
-# Offline, works after generation:
+# Offline, works after generation
 data_stream = load_dataset("codeparrot/github-code", data_files={'train': 'data/train-0*-of-01126.parquet'}, split='train', filter_languages=True, languages=["C++"], num_proc=24)
 
-# Process each data object in the stream
 for obj in data_stream:
     repo_name = obj['repo_name']
     language = obj['language']
     code = obj['code']
     path = obj['path']
-    
-    # Initialize the repository entry if not already present
+
     if repo_name not in repo_info:
-        repo_info[repo_name] = {
-            'num_files': 0,
-            'languages': set(),
-            'Raw SQL': 0,
-            'ODBC': 0,
-            'Berkeley DB': 0,
-            'LevelDB': 0,
-            'LMDB': 0,
-            'Redis': 0,
-            'MongoDB': 0,
-            'Cassandra': 0,
-            'Neo4J': 0,
-            'OrientDB': 0,
-        }
-    
+        repo_info[repo_name] = {'num_files': 0, 'languages': set(), **{method: 0 for method in patterns.keys()}}
+
     # Update the repository information
     repo_info[repo_name]['num_files'] += 1
     repo_info[repo_name]['languages'].add(language)
-    
-    # Count occurrences of each querying method
+
     for method, pattern in patterns.items():
-        repo_info[repo_name][method] += len(re.findall(pattern, code))
-    
-    # Periodically write to CSV and clear repo_info to manage memory usage
+        matches = len(re.findall(pattern, code))
+        repo_info[repo_name][method] += matches
+
     if len(repo_info) >= 1000:
         write_all_repo_data()
         repo_info = {}
@@ -106,7 +110,7 @@ for obj in data_stream:
         print(f"STAT: {left} files left ({per}%). Running for {datetime.datetime.now() - job_start_time}.", end=" ")
         print(f"This loop took {formatted_duration} seconds.")
         loop_start_time = datetime.datetime.now()
-            
+
 # Write remaining data to CSV file
 write_all_repo_data()
 

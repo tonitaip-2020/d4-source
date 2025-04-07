@@ -12,92 +12,108 @@ from collections import defaultdict
 
 # Define regex patterns for different querying methods
 patterns = {
-    'Raw SQL': r'SQL|sqlite3|pg|pg::Connection|mysql2',
-    'Ruby on Rails': r'Rails',
-    'ActiveRecord (SQLite, MySQL, PostgreSQL, etc.)': r'ActiveRecord',
-    'Sequel': r'Sequel',
-    'DataMapper': r'DataMapper',
-    'MongoDB (Mongo Ruby Driver)': r'Mongo|Mongo::Client',
-    'Redis (Redis Ruby Gem)': r'Redis',
-    'Cassandra (Cassandra Ruby Gem)': r'Cassandra',
-    'Neo4j (Neo4jrb Ruby Gem)': r'Neo4j',
-    'OrientDB (Orientdb Ruby Gem)': r'Orientdb',
-    'RavenDB (RavenDB Ruby Gem)': r'Raven|RavenDB',
-    'LiteDB': r'LiteDB',
+    # Raw SQL: SQLite, PostgreSQL, Oracle, DB2, SQL Server/Sybase (=tiny_tds) Firebird (=fb)
+    # ODBC
+    "RawSQL": r"'SQL'|'sqlite3'|'pg'|'pg::Connection'|'mysql2'|'oci8'|'tiny_tds'|'ibm_db'|'fb'|'odbc'",
+
+    # ORMs and data abstraction layers
+    "Ruby on Rails": r"'Rails'",
+    "ActiveRecord": r"'active_record'",
+    "Sequel": r"'sequel'",
+    "ROM.rb": r"'rom'|'rom-sql'",
+    "DataMapper": r"''data_mapper'",
+    "Hanami::Model": r"'hanami/model'",
+    "Trailblazer::Reform": r"'reform'",
+    "Arel": r"'arel'",
+
+    # NoSQL databases
+    "MongoDB": r"'mongo'|'Mongo::Client'|'mongoid'",
+    "CouchDB": r"'couchrest'",
+    "Redis": r"'redis'|'redic'|'ohm'|'moneta'",
+    "Cassandra": r"'cassandra'", # and ScyllaDB
+    "HBase": r"'hbase'",
+    "Neo4j": r"'neo4j'",
+    "Gremlin.rb": r"'gremlin'",
+    "InfluxDB": r"'influxdb'",
+
+    # Embedded databases
+    "LevelDB": r"'leveldb'",
+    "LMDB": r"'lmdb'",
+    "GDBM": r"'gdbm'",
+    "TDB": r"'tdb'",
+    "PStore": r"'pstore'",
+
+    # Other methods
+    # Out of scope for d4
+    #"Google Firestore": r"firebase",
+    #"Google Bigtable": r"google.cloud.bigtable",
+    #"Amazon DynamoDB": r"aws-sdk-dynamodb",
+    #"Microsoft Azure CosmosDB": r"azure.cosmos",
+    #"CockroachDB": r"pg",
+    #"TiDB": r"mysql2",
+    #"RabbitMQ": r"bunny",
+    #"Apache Kafka": r"kafka",
+    #"ActiveMQ": r"stomp",
+    #"ZeroMQ": r"ffi-rzmq",
+    #"NATS": r"nats",
+    #"Elasticsearch": r"elasticsearch",
+    #"Apache Solr": r"rsolr",
+    #"Google BigQuery": r"google/cloud/bigquery",
+    #"Que": r"que",
+    #"Sidekiq": r"sidekiq",
+    #"Resque": r"resque"
 }
 
 # File path for CSV output
-csv_file_path = 'ruby.csv'
+csv_file_path = "ruby.csv"
 
-# Initialize CSV file and write the header if the file doesn't exist
 if not os.path.exists(csv_file_path):
-    with open(csv_file_path, mode='w', newline='') as csv_file:
-        fieldnames = ['repo_name', 'num_files', 'languages'] + list(patterns.keys())
+    with open(csv_file_path, mode="w", newline="") as csv_file:
+        fieldnames = ["repo_name", "num_files", "languages"] + list(patterns.keys())
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
 
-# Dictionary to store aggregated information per repository
 repo_info = {}
 count = 0
 job_start_time = datetime.datetime.now()
 loop_start_time = datetime.datetime.now()
 
-# Function to write repositories with non-zero values to the CSV file
 def write_all_repo_data():
-    with open(csv_file_path, mode='a', newline='') as csv_file:
-        fieldnames = ['repo_name', 'num_files', 'languages'] + list(patterns.keys())
+    with open(csv_file_path, mode="a", newline="") as csv_file:
+        fieldnames = ["repo_name", "num_files", "languages"] + list(patterns.keys())
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         for repo_name, info in repo_info.items():
             if any(info[method] > 0 for method in patterns.keys()):
                 writer.writerow({
-                    'repo_name': repo_name,
-                    'num_files': info['num_files'],
-                    'languages': ', '.join(info['languages']),
+                    "repo_name": repo_name,
+                    "num_files": info["num_files"],
+                    "languages": ", ".join(info["languages"]),
                     **{method: info[method] for method in patterns.keys()}
                 })
 
-# Offline, works after generation:
-data_stream = load_dataset("codeparrot/github-code", data_files={'train': 'data/train-0*-of-01126.parquet'}, split='train', filter_languages=True, languages=["Ruby"], num_proc=24)
+# Offline, works after generation
+data_stream = load_dataset("codeparrot/github-code", data_files={"train": "data/train-0*-of-01126.parquet"}, split="train", filter_languages=True, languages=["Ruby"], num_proc=24)
 
-# Process each data object in the stream
 for obj in data_stream:
-    repo_name = obj['repo_name']
-    language = obj['language']
-    code = obj['code']
-    path = obj['path']
-    
-    # Initialize the repository entry if not already present
+    repo_name = obj["repo_name"]
+    language = obj["language"]
+    code = obj["code"]
+    path = obj["path"]
+
     if repo_name not in repo_info:
-        repo_info[repo_name] = {
-            'num_files': 0,
-            'languages': set(),
-            'Raw SQL': 0,
-            'Ruby on Rails': 0,
-            'ActiveRecord (SQLite, MySQL, PostgreSQL, etc.)': 0,
-            'Sequel': 0,
-            'DataMapper': 0,
-            'MongoDB (Mongo Ruby Driver)': 0,
-            'Redis (Redis Ruby Gem)': 0,
-            'Cassandra (Cassandra Ruby Gem)': 0,
-            'Neo4j (Neo4jrb Ruby Gem)': 0,
-            'OrientDB (Orientdb Ruby Gem)': 0,
-            'RavenDB (RavenDB Ruby Gem)': 0,
-            'LiteDB': 0,
-        }
-    
+        repo_info[repo_name] = {"num_files": 0, "languages": set(), **{method: 0 for method in patterns.keys()}}
+
     # Update the repository information
-    repo_info[repo_name]['num_files'] += 1
-    repo_info[repo_name]['languages'].add(language)
-    
-    # Count occurrences of each querying method
+    repo_info[repo_name]["num_files"] += 1
+    repo_info[repo_name]["languages"].add(language)
+
     for method, pattern in patterns.items():
-        repo_info[repo_name][method] += len(re.findall(pattern, code))
-    
-    # Periodically write to CSV and clear repo_info to manage memory usage
+        matches = len(re.findall(pattern, code))
+        repo_info[repo_name][method] += matches
+
     if len(repo_info) >= 1000:
         write_all_repo_data()
         repo_info = {}
-
     count += 1
     if count % 10000 == 0:
         total = 4473331 # Ruby
@@ -109,7 +125,7 @@ for obj in data_stream:
         print(f"STAT: {left} files left ({per}%). Running for {datetime.datetime.now() - job_start_time}.", end=" ")
         print(f"This loop took {formatted_duration} seconds.")
         loop_start_time = datetime.datetime.now()
-            
+
 # Write remaining data to CSV file
 write_all_repo_data()
 

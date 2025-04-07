@@ -12,47 +12,95 @@ from collections import defaultdict
 
 # Define regex patterns for different querying methods
 patterns = {
-    'Raw SQL': r'import\s+java\.sql\.(Connection|DriverManager|Statement|PreparedStatement|ResultSet)',
-    'Hibernate': r'import\s+org\.hibernate\.(Session|SessionFactory|query\.Query|cfg\.Configuration|Criteria)',
-    'JPA': r'import\s+javax\.persistence\.(EntityManager|PersistenceContext|Query|TypedQuery|NamedQuery|Entity|Table|Id|Column);',
-    'jOOQ': r'import\s+org\.jooq',
-    'MyBatis': r'import\s+org\.apache\.ibatis\.(annotations\.Select|annotations\.Insert|annotations\.Update|annotations\.Delete);',
-    'Spring Data JPA': r'import\s+org\.springframework\.data\.jpa\.(repository\.JpaRepository|repository\.Query);',
-    'QueryDSL': r'import\s+com\.querydsl\.jpa\.impl\.JPAQueryFactory;',
-    'JdbcTemplate': r'import\s+org\.springframework\.jdbc\.core\.JdbcTemplate;',
-    'Ebean ORM': r'import\s+io\.ebean\.(Ebean|Query|Server);',
-    'Criteria API (JPA)': r'import\s+javax\.persistence\.criteria\.(CriteriaBuilder|CriteriaQuery|Root);',
-    'Spring JDBC Template': r'import\s+org\.springframework\.jdbc\.core\.JdbcTemplate;',
-    'Apache Cayenne': r'import\s+org\.apache\.cayenne\.(ObjectSelect|SQLTemplate);',
-    'OpenJPA': r'import\s+org\.apache\.openjpa\.(persistence\.EntityManager|persistence\.PersistenceContext|persistence\.Query|persistence\.TypedQuery|persistence\.NamedQuery);',
-    'Redis': r'import\s+redis\.clients\.jedis\.(Jedis|JedisPool);|redis\.',
-    'MongoDB': r'import\s+com\.mongodb\.(MongoClient|MongoDatabase|MongoCollection);|mongodb\.',
-    'Cassandra': r'import\s+com\.datastax\.driver\.core|cassandra\.',
-    'Neo4J': r'import\s+org\.neo4j\.driver|neo4j\.',
-    'ObjectDB': r'import\s+com\.objectdb\.ojb',
-    'EclipseLink': r'import\s+org\.eclipse\.persistence\.(sessions\.Session|queries\.Query|jpa\.EntityManager);',
-    'Batoo JPA': r'import\s+org\.batoo\.jpa\.(EntityManager|Persistence|Query);',
-    'Speedment': r'import\s+com\.speedment\.(Speedment|config\.db\.tables\.Table|runtime\.core\.Application);',
-    'OrientDB': r'import\s+com\.orientechnologies\.orient\.(core\.db\.ODatabaseSession|core\.query\.OQuery);'
+    # Raw SQL: SQLite, MySQL, PostgreSQL, Oracle, SQL Server, MariaDB, Firebird, DB2, Sybase, H2
+    # JDBC, ODBC
+    'RawSQL': r'org\.sqlite\.JDBC|org\.h2\.Driver|org\.hsqldb\.jdbc\.JDBCDriver|com\.sybase\.jdbc4\.jdbc\.SybDriver|com\.ibm\.db2\.jcc\.DB2Driver|org\.mariadb\.jdbc\.Driver|org\.mariadb\.jdbc\.Driver|com\.microsoft\.sqlserver\.jdbc\.SQLServerDriver|com\.mysql\.cj\.jdbc\.Driver|org\.postgresql\.Driver|oracle\.jdbc\.OracleDriver|java\.sql\..*|sun\.jdbc\.odbc\..*',
+
+    # Object-Relational Mappers (ORMs) & SQL Abstraction Layers
+    'Hibernate': r'org\.hibernate\.SessionFactory',
+    'Jakarta Persistence API (JPA)': r'javax\.persistence\..*',
+    'Spring Data JPA': r'org\.springframework\.data\.jpa\.repository\.JpaRepository',
+    'EclipseLink': r'org\.eclipse\.persistence\.jpa\.JpaEntityManager',
+    'TopLink': r'oracle\.toplink\.essentials\..*',
+    'OpenJPA': r'org\.apache\.openjpa\.persistence\..*',
+    'JOOQ': r'org\.jooq\.DSLContext',
+    'QueryDSL': r'com\.querydsl\.jpa\.impl\.JPAQueryFactory',
+    'MyBatis': r'org\.apache\.ibatis\.session\.SqlSession',
+    'Apache Cayenne': r'org\.apache\.cayenne\.ObjectContext',
+    'JDBI': r'org\.jdbi\.v3\.core\.Jdbi',
+    'Ebean ORM': r'io\.ebean\..*',
+
+    # NoSQL databases
+    'MongoDB': r'com\.mongodb\.client\.MongoClient',
+    'CouchDB': r'org\.ektorp\.CouchDbConnector',
+    'Couchbase': r'com\.couchbase\.client\.java\.Cluster',
+    'RavenDB': r'net\.ravendb\.client\.documents\.DocumentStore',
+    'Redis': r'redis\.clients\.jedis\.Jedis|org\.redisson\.api\.RedissonClient'',
+    'Apache Ignite': r'org\.apache\.ignite\.Ignite',
+    'Hazelcast': r'com\.hazelcast\.core\.HazelcastInstance',
+    'Ehcache': r'net\.sf\.ehcache\.CacheManager',
+    'Memcached': r'net\.spy\.memcached\.MemcachedClient',
+    'Apache Cassandra': r'com\.datastax\.oss\.driver\.api\.core\.CqlSession',
+    'HBase': r'org\.apache\.hadoop\.hbase\.client\.Connection',
+    'ScyllaDB': r'com\.datastax\.oss\.driver\.api\.core\.CqlSession',
+    'Neo4j': r'org\.neo4j\.driver\.Driver',
+    'TinkerPop Gremlin': r'org\.apache\.tinkerpop\.gremlin\.driver\.Cluster',
+    'ArangoDB': r'com\.arangodb\.ArangoDB',
+    'InfluxDB': r'org\.influxdb\.InfluxDB',
+    'TimescaleDB': r'org\.postgresql\.Driver',
+
+    # Embedded & File-Based Databases
+    'Berkeley DB': r'com\.sleepycat\.je\.Database',
+    'LevelDB': r'org\.iq80\.leveldb\.DB',
+    'LMDB': r'org\.lmdbjava\.Env',
+
+    # Other methods
+    'Derby (JavaDB)': r'org\.apache\.derby\.jdbc\.EmbeddedDriver',
+    'Apache Phoenix': r'org\.apache\.phoenix\.jdbc\.PhoenixDriver',
+    'JTA': r'javax\.transaction\..*',
+    'Spring Data JDBC': r'org\.springframework\.data\.jdbc\.repository\.config\.EnableJdbcRepositories',
+    'Apache Commons DbUtils': r'org\.apache\.commons\.dbutils\.QueryRunner',
+
+    # Cloud & Distributed Databases
+    # Out of scope for d4
+    #'Google Firestore': r'com\.google\.cloud\.firestore\.Firestore',
+    #'Google Bigtable': r'com\.google\.cloud\.bigtable\.hbase\.BigtableConfiguration',
+    #'Amazon DynamoDB': r'software\.amazon\.awssdk\.services\.dynamodb\.DynamoDbClient',
+    #'Microsoft Azure CosmosDB': r'com\.azure\.cosmos\.CosmosClient',
+    #'CockroachDB': r'org\.postgresql\.Driver',
+    #'TiDB': r'com\.mysql\.cj\.jdbc\.Driver',
+
+    # Message Queues & Caching Systems
+    # Out of scope for d4
+    #'RabbitMQ': r'com\.rabbitmq\.client\.ConnectionFactory',
+    #'Apache Kafka': r'org\.apache\.kafka\.clients\.producer\.KafkaProducer',
+    #'ActiveMQ': r'org\.apache\.activemq\.ActiveMQConnectionFactory',
+    #'ZeroMQ': r'org\.zeromq\.ZMQ',
+    #'NATS': r'io\.nats\.client\.Connection',
+
+    # Specialized Data APIs & Graph Query Engines
+    # Out of scope for d4
+    #'Apache Solr': r'org\.apache\.solr\.client\.solrj\.SolrClient',
+    #'Elasticsearch': r'org\.elasticsearch\.client\.RestHighLevelClient',
+    #'Google BigQuery': r'com\.google\.cloud\.bigquery\.BigQuery',
+
 }
 
 # File path for CSV output
 csv_file_path = 'java.csv'
 
-# Initialize CSV file and write the header if the file doesn't exist
 if not os.path.exists(csv_file_path):
     with open(csv_file_path, mode='w', newline='') as csv_file:
         fieldnames = ['repo_name', 'num_files', 'languages'] + list(patterns.keys())
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
 
-# Dictionary to store aggregated information per repository
 repo_info = {}
 count = 0
 job_start_time = datetime.datetime.now()
 loop_start_time = datetime.datetime.now()
 
-# Function to write repositories with non-zero values to the CSV file
+
 def write_all_repo_data():
     with open(csv_file_path, mode='a', newline='') as csv_file:
         fieldnames = ['repo_name', 'num_files', 'languages'] + list(patterns.keys())
@@ -66,61 +114,33 @@ def write_all_repo_data():
                     **{method: info[method] for method in patterns.keys()}
                 })
 
-# Offline, works after generation:
+# Offline, works after generation
 data_stream = load_dataset("codeparrot/github-code", data_files={'train': 'data/train-0*-of-01126.parquet'}, split='train', filter_languages=True, languages=["Java"], num_proc=24)
 
-# Process each data object in the stream
 for obj in data_stream:
     repo_name = obj['repo_name']
     language = obj['language']
     code = obj['code']
     path = obj['path']
-    
-    # Initialize the repository entry if not already present
+
     if repo_name not in repo_info:
-        repo_info[repo_name] = {
-            'num_files': 0,
-            'languages': set(),
-            'Raw SQL': 0,
-            'Hibernate': 0,
-            'JPA': 0,
-            'jOOQ': 0,
-            'MyBatis': 0,
-            'Spring Data JPA': 0,
-            'QueryDSL': 0,
-            'JdbcTemplate': 0,
-            'Ebean ORM': 0,
-            'Criteria API (JPA)': 0,
-            'Spring JDBC Template': 0,
-            'Apache Cayenne': 0,
-            'OpenJPA': 0,
-            'Redis': 0,
-            'MongoDB': 0,
-            'Cassandra': 0,
-            'Neo4J': 0,
-            'ObjectDB': 0,
-            'EclipseLink': 0,
-            'Batoo JPA': 0,
-            'Speedment': 0,
-            'OrientDB': 0,
-        }
-    
+        repo_info[repo_name] = {'num_files': 0, 'languages': set(), **{method: 0 for method in patterns.keys()}}
+
     # Update the repository information
     repo_info[repo_name]['num_files'] += 1
     repo_info[repo_name]['languages'].add(language)
-    
-    # Count occurrences of each querying method
+
     for method, pattern in patterns.items():
-        repo_info[repo_name][method] += len(re.findall(pattern, code))
-    
-    # Periodically write to CSV and clear repo_info to manage memory usage
+        matches = len(re.findall(pattern, code))
+        repo_info[repo_name][method] += matches
+
     if len(repo_info) >= 1000:
         write_all_repo_data()
         repo_info = {}
 
     count += 1
     if count % 10000 == 0:
-        total = 19548190
+        total = 19548190 # Java
         left = f"{total - count:,}"
         per = round(100 - count / total * 100, 2)
         loop_end_time = datetime.datetime.now()
@@ -129,7 +149,7 @@ for obj in data_stream:
         print(f"STAT: {left} files left ({per}%). Running for {datetime.datetime.now() - job_start_time}.", end=" ")
         print(f"This loop took {formatted_duration} seconds.")
         loop_start_time = datetime.datetime.now()
-            
+
 # Write remaining data to CSV file
 write_all_repo_data()
 

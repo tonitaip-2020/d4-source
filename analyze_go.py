@@ -12,40 +12,82 @@ from collections import defaultdict
 
 # Define regex patterns for different querying methods
 patterns = {
-    'Raw SQL': r'(database/sql)|(go\-pg)',
-    'GORM/GORM2': r'gorm\.io',
-    'xorm': r'xorm',
-    'upper': r'upper\.io',
-    'qbs' : r'vattle\/qbs',
-    'sqlx': r'sqlx',
-    'pgx': r'jackkc\/pgx',
-    'dbr': r'gocraft\/dbr',
-    'gorp': r'gopkg\.in',
-    'entgo': r'entgo\.io',
-    'Redis': r'go\-redis',
-    'MongoDB': r'(mongodb\.org)|(go\.mongodb)|(mongo\-driver)',
-    'Cassandra': r'gocql',
-    'Neo4J': r'neo4j\-go\-driver',
-    'OrientDB': r'orientgo',
+    # Raw SQL: SQLite, MySQL/MariaDB, PostgreSQL, SQL Server, Oracle, DB2, Firebird
+    # ODBC
+    'RawSQL': r'(database/sql)|(go\-pg)|mattn/go-sqlite3|go-sql-driver/mysql|jackc/pgx|lib/pq|microsoft/go-mssqldb|go-sql-driver/mysql|godror/godror|ibmdb/go_ibm_db|nakagami/firebirdsql|alexbrainman/odbc',
+
+    # ORMs & SQL abstraction layers
+    'GORM': r'gorm.io/gorm',
+    'Ent': r'entgo.io/ent',
+    'XORM': r'xorm.io/xorm',
+    'SQLBoiler': r'volatiletech/sqlboiler',
+    'gorm-gen': r'taichi-maker/gorm-gen',
+    'Bun': r'uptrace/bun',
+    'go-pg': r'go-pg/pg',
+    'gorm-adapter': r'casbin/gorm-adapter',
+
+    # NoSQL databases
+    'MongoDB (go-mongo-driver)': r'go.mongodb.org/mongo-driver|gopkg.in/mgo',
+    'CouchDB': r'go-kivik/kivik',
+    'Redis': r'redis/go-redis|gomodule/redigo',
+    'Olric': r'olric-io/olric',
+    'Cassandra': r'gocql/gocql',
+    'HBase': r'tsuna/gohbase',
+    'Neo4j': r'neo4j-go-driver',
+    'Gremlin-Go': r'apache/tinkerpop/gremlin-go',
+    'InfluxDB': r'influxdata/influxdb-client-go',
+    'VictoriaMetrics': r'VictoriaMetrics/metrics',
+
+    # Embedded databases
+    'BadgerDB': r'dgraph-io/badger',
+    'BoltDB': r'etcd-io/bbolt',
+    'LevelDB': r'syndtr/goleveldb',
+    'PebbleDB': r'cockroachdb/pebble',
+    'LMDB': r'bmatsuo/lmdb-go',
+
+    # Other data access libraries & abstraction layers
+    'sqlx': r'jmoiron/sqlx',
+    'gorm-dialects': r'gorm.io/driver',
+    'squirrel': r'Masterminds/squirrel',
+    'upper.io': r'upper.io/db.v3'
+
+    # Cloud & Distributed Databases
+    # Out of scope for d4
+    #'Google Firestore': r'cloud.google.com/go/firestore',
+    #'Google Bigtable': r'cloud.google.com/go/bigtable',
+    #'Amazon DynamoDB': r'aws-sdk-go-v2/service/dynamodb',
+    #'Microsoft Azure CosmosDB': r'Azure/azure-sdk-for-go/sdk/data/azcosmos',
+    #'CockroachDB': r'pgx|gorm',  # Compatible with PostgreSQL ORMs
+    #'TiDB': r'go-sql-driver/mysql',  # Compatible with MySQL driver
+
+    # Message Queues & Caching Systems
+    # Out of scope for d4
+    #'RabbitMQ': r'streadway/amqp',
+    #'Apache Kafka': r'Shopify/sarama',
+    #'Confluent Kafka': r'confluentinc/confluent-kafka-go',
+    #'NATS': r'nats-io/nats.go',
+    #'ZeroMQ': r'pebbe/zmq4',
+
+    # Specialized Data APIs & Search Engines
+    #'Elasticsearch': r'olivere/elastic',
+    #'Bleve': r'blevesearch/bleve',
+    #'Google BigQuery': r'cloud.google.com/go/bigquery'
 }
 
 # File path for CSV output
 csv_file_path = 'go.csv'
 
-# Initialize CSV file and write the header if the file doesn't exist
 if not os.path.exists(csv_file_path):
     with open(csv_file_path, mode='w', newline='') as csv_file:
         fieldnames = ['repo_name', 'num_files', 'languages'] + list(patterns.keys())
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
 
-# Dictionary to store aggregated information per repository
 repo_info = {}
 count = 0
 job_start_time = datetime.datetime.now()
 loop_start_time = datetime.datetime.now()
 
-# Function to write repositories with non-zero values to the CSV file
 def write_all_repo_data():
     with open(csv_file_path, mode='a', newline='') as csv_file:
         fieldnames = ['repo_name', 'num_files', 'languages'] + list(patterns.keys())
@@ -59,54 +101,34 @@ def write_all_repo_data():
                     **{method: info[method] for method in patterns.keys()}
                 })
 
-# Offline, works after generation:
+# Offline, works after generation
+# "GO" must be in all caps!
 data_stream = load_dataset("codeparrot/github-code", data_files={'train': 'data/train-0*-of-01126.parquet'}, split='train', filter_languages=True, languages=["GO"], num_proc=24)
 
-# Process each data object in the stream
 for obj in data_stream:
     repo_name = obj['repo_name']
     language = obj['language']
     code = obj['code']
     path = obj['path']
-    
-    # Initialize the repository entry if not already present
+
     if repo_name not in repo_info:
-        repo_info[repo_name] = {
-            'num_files': 0,
-            'languages': set(),
-            'Raw SQL': 0,
-            'GORM/GORM2': 0,
-            'xorm': 0,
-            'upper': 0,
-            'qbs': 0,
-            'sqlx': 0,
-            'pgx': 0,
-            'dbr': 0,
-            'gorp': 0,
-            'entgo': 0,
-            'Redis': 0,
-            'MongoDB': 0,
-            'Cassandra': 0,
-            'Neo4J': 0,
-            'OrientDB': 0,
-        }
-    
+        repo_info[repo_name] = {'num_files': 0, 'languages': set(), **{method: 0 for method in patterns.keys()}}
+
     # Update the repository information
     repo_info[repo_name]['num_files'] += 1
     repo_info[repo_name]['languages'].add(language)
-    
-    # Count occurrences of each querying method
+
     for method, pattern in patterns.items():
-        repo_info[repo_name][method] += len(re.findall(pattern, code))
-    
-    # Periodically write to CSV and clear repo_info to manage memory usage
+        matches = len(re.findall(pattern, code))
+        repo_info[repo_name][method] += matches
+
     if len(repo_info) >= 1000:
         write_all_repo_data()
         repo_info = {}
 
     count += 1
     if count % 10000 == 0:
-        total = 2265436
+        total = 2265436 # GO files
         left = f"{total - count:,}"
         per = round(100 - count / total * 100, 2)
         loop_end_time = datetime.datetime.now()
@@ -115,7 +137,7 @@ for obj in data_stream:
         print(f"STAT: {left} files left ({per}%). Running for {datetime.datetime.now() - job_start_time}.", end=" ")
         print(f"This loop took {formatted_duration} seconds.")
         loop_start_time = datetime.datetime.now()
-            
+
 # Write remaining data to CSV file
 write_all_repo_data()
 
