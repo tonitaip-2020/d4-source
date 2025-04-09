@@ -35,7 +35,7 @@ patterns = {
     'CouchDB': r'org\.ektorp\.CouchDbConnector',
     'Couchbase': r'com\.couchbase\.client\.java\.Cluster',
     'RavenDB': r'net\.ravendb\.client\.documents\.DocumentStore',
-    'Redis': r'redis\.clients\.jedis\.Jedis|org\.redisson\.api\.RedissonClient'',
+    'Redis': r'redis\.clients\.jedis\.Jedis|org\.redisson\.api\.RedissonClient',
     'Apache Ignite': r'org\.apache\.ignite\.Ignite',
     'Hazelcast': r'com\.hazelcast\.core\.HazelcastInstance',
     'Ehcache': r'net\.sf\.ehcache\.CacheManager',
