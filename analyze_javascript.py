@@ -13,7 +13,7 @@ from collections import defaultdict
 # Define regex patterns for different querying methods
 patterns = {
     # Raw SQL: MySQL, PostgreSQL/TimescaleDB/CockroachDB, SQLite, SQL Server, Oracle, MariaDB, DB2
-    'RawSQL': r"'mysql'|'mysql2'|'pg'|'pg-promise'|'sqlite.*?'|'better-sqlite.*?'|'oracledb'|'mariadb'|'ibm_db',
+    'RawSQL': r"'mysql'|'mysql2'|'pg'|'pg-promise'|'sqlite.*?'|'better-sqlite.*?'|'oracledb'|'mariadb'|'ibm_db'",
 
     # ORMs and SQL abstraction layers
     'Sequelize': r"'sequelize'",
