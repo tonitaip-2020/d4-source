@@ -20,11 +20,10 @@ patterns = {
 
     # ORMs & SQL abstraction layers
     "OLE DB": r"using\s+System\.Data\.OleDb",
-    "ADO.NET": r"using\s+System\.Data",
     "Entity Framework": r"using\s+Microsoft\.EntityFrameworkCore|using\s+System\.Data\.Entity", # Core & EF6
     "Dapper": r"using\s+Dapper",
     "NHibernate": r"using\s+NHibernate",
-    "LINQ": r"using\s+System\.Data\.Linq|using\s+LinqToDB|linq", # LINQ to SQL, Linq2db, Linq general
+    "LINQ": r"using\s+System\.Data\.Linq|using\s+LinqToDB|linq|Linq", # LINQ to SQL, Linq2db, Linq general
     "ServiceStack OrmLite": r"using\s+ServiceStack\.OrmLite",
     "Telerik Data Access": r"using\s+Telerik\.OpenAccess",
     "RepoDb": r"using\s+RepoDb",
