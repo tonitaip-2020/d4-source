@@ -6,7 +6,7 @@ Analyzes source code files for data access methods, i.e., how software applicati
 
 - `analysis_*.py` = files for analyzing the repositories of different languages.
 - `create_summary.py` = for summarizing the .csv outputs.
-- `summaries.txt` = data summaries output by `create_summaries.py`.
+- `summary.txt` = data summaries output by `create_summaries.py`.
 - (raw analysis data are not included due to their size)
 
 ## Usage
