@@ -18,7 +18,7 @@ patterns = {
 
     # ORMs & SQL abstraction layers
     'GORM': r'gorm.io/gorm',
-    'Ent': r'entgo.io/ent',
+    'Ent': r'"(?:entgo\.io/ent|/ent)"',
     'XORM': r'xorm.io/xorm',
     'SQLBoiler': r'volatiletech/sqlboiler',
     'gorm-gen': r'taichi-maker/gorm-gen',
