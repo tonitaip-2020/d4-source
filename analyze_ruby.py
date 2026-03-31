@@ -14,54 +14,31 @@ from collections import defaultdict
 patterns = {
     # Raw SQL: SQLite, PostgreSQL, Oracle, DB2, SQL Server/Sybase (=tiny_tds) Firebird (=fb)
     # ODBC
-    "RawSQL": r"'SQL'|'sqlite3'|'pg'|'pg::Connection'|'mysql2'|'oci8'|'tiny_tds'|'ibm_db'|'fb'|'odbc'",
-
-    # ORMs and data abstraction layers
-    "Ruby on Rails": r"'Rails'",
-    "ActiveRecord": r"'active_record'",
-    "Sequel": r"'sequel'",
-    "ROM.rb": r"'rom'|'rom-sql'",
-    "DataMapper": r"''data_mapper'",
-    "Hanami::Model": r"'hanami/model'",
-    "Trailblazer::Reform": r"'reform'",
-    "Arel": r"'arel'",
-
-    # NoSQL databases
-    "MongoDB": r"'mongo'|'Mongo::Client'|'mongoid'",
-    "CouchDB": r"'couchrest'",
-    "Redis": r"'redis'|'redic'|'ohm'|'moneta'",
-    "Cassandra": r"'cassandra'", # and ScyllaDB
-    "HBase": r"'hbase'",
-    "Neo4j": r"'neo4j'",
-    "Gremlin.rb": r"'gremlin'",
-    "InfluxDB": r"'influxdb'",
-
-    # Embedded databases
-    "LevelDB": r"'leveldb'",
-    "LMDB": r"'lmdb'",
-    "GDBM": r"'gdbm'",
-    "TDB": r"'tdb'",
-    "PStore": r"'pstore'",
-
-    # Other methods
-    # Out of scope for d4
-    #"Google Firestore": r"firebase",
-    #"Google Bigtable": r"google.cloud.bigtable",
-    #"Amazon DynamoDB": r"aws-sdk-dynamodb",
-    #"Microsoft Azure CosmosDB": r"azure.cosmos",
-    #"CockroachDB": r"pg",
-    #"TiDB": r"mysql2",
-    #"RabbitMQ": r"bunny",
-    #"Apache Kafka": r"kafka",
-    #"ActiveMQ": r"stomp",
-    #"ZeroMQ": r"ffi-rzmq",
-    #"NATS": r"nats",
-    #"Elasticsearch": r"elasticsearch",
-    #"Apache Solr": r"rsolr",
-    #"Google BigQuery": r"google/cloud/bigquery",
-    #"Que": r"que",
-    #"Sidekiq": r"sidekiq",
-    #"Resque": r"resque"
+    "RawSQL": r'\b(?:require|gem)\s*[("\']+(?:sqlite3|pg|mysql2|oci8|tiny_tds|ibm_db|fb|odbc)[)"\']|\bPG::Connection\b',
+    
+    "Ruby on Rails": r'\bRails\b|(?:require|gem)\s*[("\']+rails[)"\']',
+    "ActiveRecord": r'\bActiveRecord\b|(?:require|gem)\s*[("\']+active_record[)"\']',
+    "Sequel": r'\bSequel\b|(?:require|gem)\s*[("\']+sequel[)"\']',
+    "ROM.rb": r'\bROM\b|(?:require|gem)\s*[("\']+(?:rom|rom-sql)[)"\']',
+    "DataMapper": r'\bDataMapper\b|(?:require|gem)\s*[("\']+data_mapper[)"\']',
+    "Hanami::Model": r'\bHanami::Model\b|(?:require|gem)\s*[("\']+hanami/model[)"\']',
+    "Trailblazer::Reform": r'\bReform\b|(?:require|gem)\s*[("\']+reform[)"\']',
+    "Arel": r'\bArel\b|(?:require|gem)\s*[("\']+arel[)"\']',
+    
+    "MongoDB": r'\bMongo(?:id|::Client)?\b|(?:require|gem)\s*[("\']+(?:mongo|mongoid)[)"\']',
+    "CouchDB": r'(?:require|gem)\s*[("\']+couchrest[)"\']',
+    "Redis": r'\bRedis\b|(?:require|gem)\s*[("\']+(?:redis|redic|ohm|moneta)[)"\']',
+    "Cassandra": r'\bCassandra\b|(?:require|gem)\s*[("\']+cassandra[)"\']',
+    "HBase": r'(?:require|gem)\s*[("\']+hbase[)"\']',
+    "Neo4j": r'\bNeo4j\b|(?:require|gem)\s*[("\']+neo4j[)"\']',
+    "Gremlin.rb": r'(?:require|gem)\s*[("\']+gremlin[)"\']',
+    
+    "InfluxDB": r'\bInfluxDB\b|(?:require|gem)\s*[("\']+influxdb[)"\']',
+    "LevelDB": r'\bLevelDB\b|(?:require|gem)\s*[("\']+leveldb[)"\']',
+    "LMDB": r'\bLMDB\b|(?:require|gem)\s*[("\']+lmdb[)"\']',
+    "GDBM": r'\bGDBM\b|(?:require|gem)\s*[("\']+gdbm[)"\']',
+    "TDB": r'(?:require|gem)\s*[("\']+tdb[)"\']',
+    "PStore": r'\bPStore\b|(?:require|gem)\s*[("\']+pstore[)"\']',
 }
 
 # File path for CSV output
