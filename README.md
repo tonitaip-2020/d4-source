@@ -60,3 +60,10 @@ python .\analyze.py ruby
 ```
 
 4. Results are saved in a .csv file.
+
+5. Run create_summaries to generate summaries from the .csv file(s):
+
+```
+python .\create_summaries.py .
+```
+
