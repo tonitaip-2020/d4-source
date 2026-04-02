@@ -412,17 +412,17 @@ def main() -> int:
     loop_start_time = dt.datetime.now()
 
     dataset = load_dataset(
-        "codeparrot/github-code",
+        "parquet",
         data_files={"train": args.data_files},
         split="train",
-        filter_languages=True,
-        languages=[hf_language],
         num_proc=args.num_proc,
     )
 
     for obj in dataset:
         repo_name = obj["repo_name"]
         lang_value = obj["language"]
+        if lang_value != hf_language:
+            continue
         code = obj.get("code") or ""
 
         info = repo_info.setdefault(
