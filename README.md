@@ -44,21 +44,6 @@ snapshot_download(
 '@ | python -
 ```
 
-Warm the cache (once):
-
-```
-@'
-from datasets import load_dataset
-
-ds = load_dataset(
-    "codeparrot/github-code",
-    data_files={"train": "data/train-0*-of-01126.parquet"},
-    split="train[:1]",
-)
-print(ds[0]["repo_name"])
-'@ | python -
-```
-
    
 3. Run the analyze.py with parameters depending on which language's data access methods you want to analyze.
 
