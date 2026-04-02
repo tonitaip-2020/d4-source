@@ -53,7 +53,7 @@ If you downloaded the files (step #2 above), run:
 $env:HF_DATASETS_OFFLINE = "1"
 ```
 
-Run the script for the language you want to, e.g.:
+Run the script for the language you want to, e.g. (this will scan the Parquet files, and not create Arrow files to save disk space):
 
 ```
 python .\analyze.py ruby
