@@ -70,6 +70,7 @@ def language_label_from_filename(filename: str) -> str:
     stem = Path(filename).stem
     mapping = {
         "c++": "C++",
+        "cpp": "C++",
         "c": "C",
         "php": "PHP",
         "java": "Java",
@@ -98,6 +99,8 @@ def load_language_csv(csv_path: Path) -> Tuple[List[str], pd.DataFrame]:
     if not method_cols:
         raise ValueError(f"{csv_path.name}: no data access method columns found")
 
+    df["num_files"] = pd.to_numeric(df["num_files"], errors="coerce").fillna(0).astype(int)
+
     # Force numeric 0/1 interpretation for method columns
     for col in method_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
@@ -115,8 +118,8 @@ def analyze_language(csv_path: Path) -> Dict:
     total_with_any_method = len(eligible_df)
 
     total_repositories = len(df)
-    total_files = int(df["num_files"].fillna(0).sum())
-    eligible_files = int(eligible_df["num_files"].fillna(0).sum())
+    total_files = int(df["num_files"].sum())
+    eligible_files = int(eligible_df["num_files"].sum())
 
     counts = {}
     for method in method_cols:
@@ -136,6 +139,7 @@ def analyze_language(csv_path: Path) -> Dict:
             }
         )
 
+    # Sort by descending count, then descending proportion, then name
     rows.sort(key=lambda x: (-x["count"], -x["proportion"], x["method"].lower()))
 
     return {
@@ -171,7 +175,7 @@ def build_table_rows(
     Keep methods that exceed the threshold in at least one language.
     """
     selected_methods = set()
-    for lang_filename, result in per_language.items():
+    for _, result in per_language.items():
         for row in result["methods"]:
             if row["proportion"] > threshold:
                 selected_methods.add(row["method"])
@@ -205,13 +209,9 @@ def emit_latex_table(
     lines.append(r"\footnotesize")
     lines.append(r"\setlength{\tabcolsep}{4pt}")
     lines.append(r"\renewcommand{\arraystretch}{1.15}")
-    lines.append(
-        r"\begin{tabular}{l" + "c" * len(col_labels) + r"}"
-    )
+    lines.append(r"\begin{tabular}{l" + "c" * len(col_labels) + r"}")
     lines.append(r"\hline")
-    lines.append(
-        "Method & " + " & ".join(col_labels) + r" \\"
-    )
+    lines.append("Method & " + " & ".join(col_labels) + r" \\")
     lines.append(r"\hline")
 
     for method in selected_methods:
