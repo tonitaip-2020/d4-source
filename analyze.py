@@ -3,16 +3,14 @@ from __future__ import annotations
 
 import argparse
 import csv
-import datetime as dt
-import os
+import datetime
+import glob
 import re
 import sys
 from pathlib import Path
-from typing import Dict, Pattern
+from typing import Dict, Iterable, List, Pattern, Sequence, Tuple
 
-os.environ.setdefault("HF_DATASETS_OFFLINE", "1")
-
-from datasets import load_dataset
+import pyarrow.dataset as ds
 
 PATTERNS: Dict[str, Dict[str, str]] = {
     "c": {
@@ -34,7 +32,7 @@ PATTERNS: Dict[str, Dict[str, str]] = {
         "UnQLite": r'#include\s*[<\"]unqlite\.h[\">]',
     },
     "cpp": {
-        "RawSQL": r'#include\s*[<\"]\s*(?:mysql|pqxx|pg_query|mariadb|sqlite|oci|sybfront|sybdb|ibase|odbc)',
+        "RawSQL": r'#include\s*[<\"]\s*mysql|#include\s*[<\"]\s*pqxx|#include\s*[<\"]\s*pg_query|#include\s*[<\"]\s*mariadb|#include\s*[<\"]\s*sqlite|#include\s*[<\"]\s*oci|#include\s*[<\"]\s*sybfront|#include\s*[<\"]\s*sydb|#include\s*[<\"]\s*ibase|#include\s*[<\"]\s*oci|#include\s*[<\"]\s*odbc',
         "Redis": r'#include\s*[<\"]\s*hiredis',
         "MongoDB": r'#include\s*[<\"]\s*mongocxx',
         "Cassandra": r'#include\s*[<\"]\s*cassandra',
@@ -46,7 +44,7 @@ PATTERNS: Dict[str, Dict[str, str]] = {
         "UnQLite": r'#include\s*[<\"]\s*unqlite',
         "GDBM": r'#include\s*[<\"]\s*gdbm',
         "RocksDB": r'#include\s*[<\"]\s*rocksdb',
-        "LevelDB": r'#include\s*[<\"]\s*(?:leveldb|LevelDB)',
+        "LevelDB": r'#include\s*[<\"]\s*leveldb|#include\s*[<\"]\s*LevelDB',
         "LMDB": r'#include\s*[<\"]\s*lmdb',
         "FoundationDB": r'#include\s*[<\"]\s*fdb_c',
         "HyperLevelDB": r'#include\s*[<\"]\s*hyperleveldb',
@@ -55,409 +53,414 @@ PATTERNS: Dict[str, Dict[str, str]] = {
         "sqlpp11": r'#include\s*[<\"]\s*sqlpp11',
     },
     "csharp": {
-        "RawSQL": r'\busing\s+(?:System\.Data\.Odbc|System\.Data\.SqlClient|Microsoft\.Data\.SqlClient|MySql\.Data\.MySqlClient|Npgsql|Oracle\.ManagedDataAccess\.Client|FirebirdSql\.Data\.FirebirdClient|IBM\.Data\.DB2|Sybase\.Data\.AseClient|System\.Data\.OleDb|System\.Data\.SQLite)\s*;',
-        "OLE DB": r'\busing\s+System\.Data\.OleDb\s*;',
-        "Entity Framework": r'\busing\s+(?:Microsoft\.EntityFrameworkCore|System\.Data\.Entity)\s*;',
-        "Dapper": r'\busing\s+Dapper\s*;',
-        "NHibernate": r'\busing\s+NHibernate\s*;',
-        "LINQ": r'\busing\s+(?:System\.Data\.Linq|LinqToDB|System\.Linq)\s*;',
-        "ServiceStack OrmLite": r'\busing\s+ServiceStack\.OrmLite\s*;',
-        "Telerik Data Access": r'\busing\s+Telerik\.OpenAccess\s*;',
-        "RepoDb": r'\busing\s+RepoDb\s*;',
-        "SqlKata": r'\busing\s+SqlKata\.Execution\s*;',
-        "PetaPoco": r'\busing\s+PetaPoco\s*;',
-        "Insight.Database": r'\busing\s+Insight\.Database\s*;',
-        "MongoDB": r'\busing\s+MongoDB\.Driver\s*;',
-        "Redis": r'\busing\s+StackExchange\.Redis\s*;',
-        "Couchbase": r'\busing\s+Couchbase\s*;',
-        "RavenDB": r'\busing\s+Raven\.Client\.Documents\s*;',
-        "Cassandra": r'\busing\s+Cassandra\s*;',
-        "DynamoDB": r'\busing\s+Amazon\.DynamoDBv2\s*;',
-        "CosmosDB": r'\busing\s+Microsoft\.Azure\.Cosmos\s*;',
-        "CouchDB": r'\busing\s+MyCouch\s*;',
-        "LiteDB": r'\busing\s+LiteDB\s*;',
-        "OrientDB": r'\busing\s+Orient\.Client\s*;',
-        "Neo4j": r'\busing\s+Neo4jClient\s*;',
-        "Memcached": r'\busing\s+Enyim\.Caching\s*;',
-        "RocksDB.NET": r'\busing\s+RocksDbSharp\s*;',
-        "LMDB.NET": r'\busing\s+LightningDB\s*;',
-        "InfluxDB": r'\busing\s+InfluxDB\.Client\s*;',
-        "TimescaleDB": r'\busing\s+Npgsql\s*;',
-        "Gremlin.NET": r'\busing\s+Gremlin\.Net\.Driver\s*;',
-        "FluentNHibernate": r'\busing\s+FluentNHibernate\s*;',
-        "NPoco": r'\busing\s+NPoco\s*;',
-        "DbUp": r'\busing\s+DbUp\s*;',
-        "MassTransit": r'\busing\s+MassTransit\s*;',
+        "RawSQL": r'using\s+System\.Data\.Odbc|using\s+System\.Data\.SqlClient|using\s+Microsoft\.Data\.SqlClient|using\s+MySql\.Data\.MySqlClient|using\s+Npgsql|using\s+Oracle\.ManagedDataAccess\.Client|using\s+FirebirdSql\.Data\.FirebirdClient|using\s+IBM\.Data\.DB2|using\s+Sybase\.Data\.AseClient|using\s+System\.Data\.OleDb|using\s+System\.Data\.SQLite',
+        "OLE DB": r'using\s+System\.Data\.OleDb',
+        "Entity Framework": r'using\s+Microsoft\.EntityFrameworkCore|using\s+System\.Data\.Entity',
+        "Dapper": r'using\s+Dapper',
+        "NHibernate": r'using\s+NHibernate',
+        "LINQ": r'using\s+System\.Data\.Linq|using\s+LinqToDB|linq|Linq',
+        "ServiceStack OrmLite": r'using\s+ServiceStack\.OrmLite',
+        "Telerik Data Access": r'using\s+Telerik\.OpenAccess',
+        "RepoDb": r'using\s+RepoDb',
+        "SqlKata": r'using\s+SqlKata\.Execution',
+        "PetaPoco": r'using\s+PetaPoco',
+        "Insight.Database": r'using\s+Insight\.Database',
+        "MongoDB": r'using\s+MongoDB\.Driver',
+        "Redis": r'using\s+StackExchange\.Redis',
+        "Couchbase": r'using\s+Couchbase',
+        "RavenDB": r'using\s+Raven\.Client\.Documents',
+        "Cassandra": r'using\s+Cassandra',
+        "DynamoDB": r'using\s+Amazon\.DynamoDBv2',
+        "CosmosDB": r'using\s+Microsoft\.Azure\.Cosmos',
+        "CouchDB": r'using\s+MyCouch',
+        "LiteDB": r'using\s+LiteDB',
+        "OrientDB": r'using\s+Orient\.Client',
+        "Neo4j": r'using\s+Neo4jClient',
+        "Memcached": r'using\s+Enyim\.Caching',
+        "RocksDB.NET": r'using\s+RocksDbSharp',
+        "LMDB.NET": r'using\s+LightningDB',
+        "InfluxDB": r'using\s+InfluxDB\.Client',
+        "TimescaleDB": r'using\s+Npgsql',
+        "Gremlin.NET": r'using\s+Gremlin\.Net\.Driver',
+        "FluentNHibernate": r'using\s+FluentNHibernate',
+        "NPoco": r'using\s+NPoco',
+        "DbUp": r'using\s+DbUp',
+        "MassTransit": r'using\s+MassTransit',
     },
     "go": {
-        "RawSQL": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?(?:"database/sql"|"github\.com/mattn/go-sqlite3"|"github\.com/go-sql-driver/mysql"|"github\.com/jackc/pgx(?:/v\d+)?(?:/stdlib)?"|"github\.com/lib/pq"|"github\.com/microsoft/go-mssqldb"|"github\.com/godror/godror"|"github\.com/ibmdb/go_ibm_db"|"github\.com/nakagami/firebirdsql"|"github\.com/alexbrainman/odbc")',
-        "GORM": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"gorm\.io/gorm"',
-        "Ent": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"(?:entgo\.io/ent|.+/ent)"',
-        "XORM": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"xorm\.io/xorm"',
-        "SQLBoiler": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/volatiletech/sqlboiler',
-        "gorm-gen": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/taichi-maker/gorm-gen',
-        "Bun": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/uptrace/bun',
-        "go-pg": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/go-pg/pg',
-        "gorm-adapter": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/casbin/gorm-adapter',
-        "MongoDB (go-mongo-driver)": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"(?:go\.mongodb\.org/mongo-driver|gopkg\.in/mgo',
-        "CouchDB": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/go-kivik/kivik',
-        "Redis": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"(?:github\.com/redis/go-redis|github\.com/gomodule/redigo)',
-        "Olric": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/olric-io/olric',
-        "Cassandra": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/gocql/gocql',
-        "HBase": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/tsuna/gohbase',
-        "Neo4j": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"(?:github\.com/neo4j/neo4j-go-driver|github\.com/neo4j/neo4j-go-driver/v\d+/neo4j)"',
-        "Gremlin-Go": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/apache/tinkerpop/gremlin-go',
-        "InfluxDB": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/influxdata/influxdb-client-go',
-        "VictoriaMetrics": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/VictoriaMetrics/metrics',
-        "BadgerDB": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/dgraph-io/badger',
-        "BoltDB": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"go\.etcd\.io/bbolt"|(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/etcd-io/bbolt"',
-        "LevelDB": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/syndtr/goleveldb',
-        "PebbleDB": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/cockroachdb/pebble',
-        "LMDB": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/bmatsuo/lmdb-go',
-        "sqlx": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/jmoiron/sqlx',
-        "gorm-dialects": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"gorm\.io/driver/',
-        "squirrel": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"github\.com/Masterminds/squirrel',
-        "upper.io": r'(?m)^\s*import\s*(?:\(|.)[\s\S]*?"upper\.io/db\.v3',
+        "RawSQL": r'(database/sql)|(go\-pg)|mattn/go-sqlite3|go-sql-driver/mysql|jackc/pgx|lib/pq|microsoft/go-mssqldb|go-sql-driver/mysql|godror/godror|ibmdb/go_ibm_db|nakagami/firebirdsql|alexbrainman/odbc',
+        "GORM": r'gorm.io/gorm',
+        "Ent": r'"(?:entgo\.io/ent|/ent)"',
+        "XORM": r'xorm.io/xorm',
+        "SQLBoiler": r'volatiletech/sqlboiler',
+        "gorm-gen": r'taichi-maker/gorm-gen',
+        "Bun": r'uptrace/bun',
+        "go-pg": r'go-pg/pg',
+        "gorm-adapter": r'casbin/gorm-adapter',
+        "MongoDB (go-mongo-driver)": r'go.mongodb.org/mongo-driver|gopkg.in/mgo',
+        "CouchDB": r'go-kivik/kivik',
+        "Redis": r'redis/go-redis|gomodule/redigo',
+        "Olric": r'olric-io/olric',
+        "Cassandra": r'gocql/gocql',
+        "HBase": r'tsuna/gohbase',
+        "Neo4j": r'neo4j-go-driver',
+        "Gremlin-Go": r'apache/tinkerpop/gremlin-go',
+        "InfluxDB": r'influxdata/influxdb-client-go',
+        "VictoriaMetrics": r'VictoriaMetrics/metrics',
+        "BadgerDB": r'dgraph-io/badger',
+        "BoltDB": r'etcd-io/bbolt',
+        "LevelDB": r'syndtr/goleveldb',
+        "PebbleDB": r'cockroachdb/pebble',
+        "LMDB": r'bmatsuo/lmdb-go',
+        "sqlx": r'jmoiron/sqlx',
+        "gorm-dialects": r'gorm.io/driver',
+        "squirrel": r'Masterminds/squirrel',
+        "upper.io": r'upper.io/db.v3',
     },
     "java": {
-        "RawSQL": r'\bimport\s+(?:org\.sqlite\.JDBC|org\.h2\.Driver|org\.hsqldb\.jdbc\.JDBCDriver|com\.sybase\.jdbc4\.jdbc\.SybDriver|com\.ibm\.db2\.jcc\.DB2Driver|org\.mariadb\.jdbc\.Driver|com\.microsoft\.sqlserver\.jdbc\.SQLServerDriver|com\.mysql\.cj\.jdbc\.Driver|org\.postgresql\.Driver|oracle\.jdbc\.OracleDriver|java\.sql\.[\w.*]+|sun\.jdbc\.odbc\.[\w.*]+)\s*;',
-        "Hibernate": r'\bimport\s+org\.hibernate\.[\w.*]+\s*;',
-        "Jakarta Persistence API (JPA)": r'\bimport\s+(?:javax|jakarta)\.persistence\.[\w.*]+\s*;',
-        "Spring Data JPA": r'\bimport\s+org\.springframework\.data\.jpa\.[\w.*]+\s*;',
-        "EclipseLink": r'\bimport\s+org\.eclipse\.persistence\.jpa\.[\w.*]+\s*;',
-        "TopLink": r'\bimport\s+oracle\.toplink\.essentials\.[\w.*]+\s*;',
-        "OpenJPA": r'\bimport\s+org\.apache\.openjpa\.persistence\.[\w.*]+\s*;',
-        "JOOQ": r'\bimport\s+org\.jooq\.[\w.*]+\s*;',
-        "QueryDSL": r'\bimport\s+com\.querydsl\.jpa\.[\w.*]+\s*;',
-        "MyBatis": r'\bimport\s+org\.apache\.ibatis\.[\w.*]+\s*;',
-        "Apache Cayenne": r'\bimport\s+org\.apache\.cayenne\.[\w.*]+\s*;',
-        "JDBI": r'\bimport\s+org\.jdbi\.v3\.[\w.*]+\s*;',
-        "Ebean ORM": r'\bimport\s+io\.ebean\.[\w.*]+\s*;',
-        "MongoDB": r'\bimport\s+com\.mongodb\.[\w.*]+\s*;',
-        "CouchDB": r'\bimport\s+org\.ektorp\.[\w.*]+\s*;',
-        "Couchbase": r'\bimport\s+com\.couchbase\.client\.java\.[\w.*]+\s*;',
-        "RavenDB": r'\bimport\s+net\.ravendb\.client\.documents\.[\w.*]+\s*;',
-        "Redis": r'\bimport\s+(?:redis\.clients\.jedis|org\.redisson)\.[\w.*]+\s*;',
-        "Apache Ignite": r'\bimport\s+org\.apache\.ignite\.[\w.*]+\s*;',
-        "Hazelcast": r'\bimport\s+com\.hazelcast\.[\w.*]+\s*;',
-        "Ehcache": r'\bimport\s+net\.sf\.ehcache\.[\w.*]+\s*;',
-        "Memcached": r'\bimport\s+net\.spy\.memcached\.[\w.*]+\s*;',
-        "Apache Cassandra": r'\bimport\s+com\.datastax\.oss\.driver\.[\w.*]+\s*;',
-        "HBase": r'\bimport\s+org\.apache\.hadoop\.hbase\.[\w.*]+\s*;',
-        "ScyllaDB": r'\bimport\s+com\.datastax\.oss\.driver\.[\w.*]+\s*;',
-        "Neo4j": r'\bimport\s+org\.neo4j\.driver\.[\w.*]+\s*;',
-        "TinkerPop Gremlin": r'\bimport\s+org\.apache\.tinkerpop\.gremlin\.[\w.*]+\s*;',
-        "ArangoDB": r'\bimport\s+com\.arangodb\.[\w.*]+\s*;',
-        "InfluxDB": r'\bimport\s+org\.influxdb\.[\w.*]+\s*;',
-        "TimescaleDB": r'\bimport\s+org\.postgresql\.[\w.*]+\s*;',
-        "Berkeley DB": r'\bimport\s+com\.sleepycat\.je\.[\w.*]+\s*;',
-        "LevelDB": r'\bimport\s+org\.iq80\.leveldb\.[\w.*]+\s*;',
-        "LMDB": r'\bimport\s+org\.lmdbjava\.[\w.*]+\s*;',
-        "Derby (JavaDB)": r'\bimport\s+org\.apache\.derby\.jdbc\.[\w.*]+\s*;',
-        "Apache Phoenix": r'\bimport\s+org\.apache\.phoenix\.jdbc\.[\w.*]+\s*;',
-        "JTA": r'\bimport\s+(?:javax|jakarta)\.transaction\.[\w.*]+\s*;',
-        "Spring Data JDBC": r'\bimport\s+org\.springframework\.data\.jdbc\.[\w.*]+\s*;',
-        "Apache Commons DbUtils": r'\bimport\s+org\.apache\.commons\.dbutils\.[\w.*]+\s*;',
+        "RawSQL": r'org\.sqlite\.JDBC|org\.h2\.Driver|org\.hsqldb\.jdbc\.JDBCDriver|com\.sybase\.jdbc4\.jdbc\.SybDriver|com\.ibm\.db2\.jcc\.DB2Driver|org\.mariadb\.jdbc\.Driver|org\.mariadb\.jdbc\.Driver|com\.microsoft\.sqlserver\.jdbc\.SQLServerDriver|com\.mysql\.cj\.jdbc\.Driver|org\.postgresql\.Driver|oracle\.jdbc\.OracleDriver|java\.sql\..*|sun\.jdbc\.odbc\..*',
+        "Hibernate": r'org\.hibernate\.SessionFactory',
+        "Jakarta Persistence API (JPA)": r'javax\.persistence\..*',
+        "Spring Data JPA": r'org\.springframework\.data\.jpa\.repository\.JpaRepository',
+        "EclipseLink": r'org\.eclipse\.persistence\.jpa\.JpaEntityManager',
+        "TopLink": r'oracle\.toplink\.essentials\..*',
+        "OpenJPA": r'org\.apache\.openjpa\.persistence\..*',
+        "JOOQ": r'org\.jooq\.DSLContext',
+        "QueryDSL": r'com\.querydsl\.jpa\.impl\.JPAQueryFactory',
+        "MyBatis": r'org\.apache\.ibatis\.session\.SqlSession',
+        "Apache Cayenne": r'org\.apache\.cayenne\.ObjectContext',
+        "JDBI": r'org\.jdbi\.v3\.core\.Jdbi',
+        "Ebean ORM": r'io\.ebean\..*',
+        "MongoDB": r'com\.mongodb\.client\.MongoClient',
+        "CouchDB": r'org\.ektorp\.CouchDbConnector',
+        "Couchbase": r'com\.couchbase\.client\.java\.Cluster',
+        "RavenDB": r'net\.ravendb\.client\.documents\.DocumentStore',
+        "Redis": r'redis\.clients\.jedis\.Jedis|org\.redisson\.api\.RedissonClient',
+        "Apache Ignite": r'org\.apache\.ignite\.Ignite',
+        "Hazelcast": r'com\.hazelcast\.core\.HazelcastInstance',
+        "Ehcache": r'net\.sf\.ehcache\.CacheManager',
+        "Memcached": r'net\.spy\.memcached\.MemcachedClient',
+        "Apache Cassandra": r'com\.datastax\.oss\.driver\.api\.core\.CqlSession',
+        "HBase": r'org\.apache\.hadoop\.hbase\.client\.Connection',
+        "ScyllaDB": r'com\.datastax\.oss\.driver\.api\.core\.CqlSession',
+        "Neo4j": r'org\.neo4j\.driver\.Driver',
+        "TinkerPop Gremlin": r'org\.apache\.tinkerpop\.gremlin\.driver\.Cluster',
+        "ArangoDB": r'com\.arangodb\.ArangoDB',
+        "InfluxDB": r'org\.influxdb\.InfluxDB',
+        "TimescaleDB": r'org\.postgresql\.Driver',
+        "Berkeley DB": r'com\.sleepycat\.je\.Database',
+        "LevelDB": r'org\.iq80\.leveldb\.DB',
+        "LMDB": r'org\.lmdbjava\.Env',
+        "Derby (JavaDB)": r'org\.apache\.derby\.jdbc\.EmbeddedDriver',
+        "Apache Phoenix": r'org\.apache\.phoenix\.jdbc\.PhoenixDriver',
+        "JTA": r'javax\.transaction\..*',
+        "Spring Data JDBC": r'org\.springframework\.data\.jdbc\.repository\.config\.EnableJdbcRepositories',
+        "Apache Commons DbUtils": r'org\.apache\.commons\.dbutils\.QueryRunner',
     },
     "javascript": {
-        "RawSQL": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\'](?:mysql|mysql2|pg|pg-promise|sqlite[^\"\']*|better-sqlite[^\"\']*|oracledb|mariadb|ibm_db)[\"\']\s*\)?',
-        "Sequelize": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']sequelize[\"\']\s*\)?',
-        "TypeORM": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']typeorm[\"\']\s*\)?',
-        "Objection.js": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']objection[\"\']\s*\)?',
-        "Knex.js": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']knex[\"\']\s*\)?',
-        "Prisma": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']@prisma/client[\"\']\s*\)?',
-        "Bookshelf.js": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']bookshelf[\"\']\s*\)?',
-        "Waterline": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']waterline[\"\']\s*\)?',
-        "Massive.js": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']massive[\"\']\s*\)?',
-        "Kysely": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']kysely[\"\']\s*\)?',
-        "MongoDB": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\'](?:mongodb|mongoose)[\"\']\s*\)?',
-        "CouchDB": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']nano[\"\']\s*\)?',
-        "PouchDB": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']pouchdb[\"\']\s*\)?',
-        "Redis": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\'](?:redis|ioredis)[\"\']\s*\)?',
-        "Keyv": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']keyv[\"\']\s*\)?',
-        "Cassandra": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']cassandra-driver[\"\']\s*\)?',
-        "ScyllaDB": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']cassandra-driver[\"\']\s*\)?',
-        "HBase": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']hbase[\"\']\s*\)?',
-        "Neo4J": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']neo4j-driver[\"\']\s*\)?',
-        "Gremlin-JS": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']gremlin[\"\']\s*\)?',
-        "InfluxDB": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']@influxdata/influxdb-client[\"\']\s*\)?',
-        "NeDB": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']nedb[\"\']\s*\)?',
-        "LowDB": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']lowdb[\"\']\s*\)?',
-        "LokiJS": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']lokijs[\"\']\s*\)?',
-        "TaffyDB": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']taffy[\"\']\s*\)?',
-        "DataLoader": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']dataloader[\"\']\s*\)?',
-        "GraphQL.js": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']graphql[\"\']\s*\)?',
-        "Apollo Client": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']@apollo/client[\"\']\s*\)?',
-        "Hasura": r'\b(?:import\s+.+?\s+from\s+|require\s*\()\s*[\"\']hasura[\"\']\s*\)?',
+        "RawSQL": r"'mysql'|'mysql2'|'pg'|'pg-promise'|'sqlite.*?'|'better-sqlite.*?'|'oracledb'|'mariadb'|'ibm_db'",
+        "Sequelize": r"'sequelize'",
+        "TypeORM": r"'typeorm'",
+        "Objection.js": r"'objection'",
+        "Knex.js": r"'knex'",
+        "Prisma": r"'@prisma/client'",
+        "Bookshelf.js": r"'bookshelf'",
+        "Waterline": r"'waterline'",
+        "Massive.js": r"'massive'",
+        "Kysely": r"'kysely'",
+        "MongoDB": r"'mongodb'|'mongoose'",
+        "CouchDB": r"'nano'",
+        "PouchDB": r"'pouchdb'",
+        "Redis": r"'redis'|'ioredis'",
+        "Keyv": r"'keyv'",
+        "Cassandra": r"'cassandra-driver'",
+        "ScyllaDB": r"'cassandra-driver'",
+        "HBase": r"'hbase'",
+        "Neo4J": r"'neo4j-driver'",
+        "Gremlin-JS": r"'gremlin'",
+        "InfluxDB": r"'@influxdata/influxdb-client'",
+        "NeDB": r"'nedb'",
+        "LowDB": r"'lowdb'",
+        "LokiJS": r"'lokijs'",
+        "TaffyDB": r"'taffy'",
+        "DataLoader": r"'dataloader'",
+        "GraphQL.js": r"'graphql'",
+        "Apollo Client": r"'@apollo/client'",
+        "Hasura": r"'hasura'",
     },
     "php": {
-        "RawSQL": r'\b(?:mysql_query|mysqli|pg_query|pgsql|sqlite|sqlsrv|oci8|ibm_db2|interbase|odbc|PDO)\b',
-        "Doctrine ORM": r'\b(?:use\s+)?Doctrine\\ORM\\',
-        "Eloquent (Illuminate)": r'\b(?:use\s+)?Illuminate\\Database\\',
-        "Propel ORM": r'\b(?:use\s+)?Propel\\',
-        "Cycle ORM": r'\b(?:use\s+)?Cycle\\ORM\\',
-        "RedBeanPHP": r'\b(?:use\s+)?RedBeanPHP\\R\b|\bR::',
-        "Idiorm": r'\b(?:use\s+)?Idiorm\\|\bORM::',
-        "Paris": r'\b(?:use\s+)?Paris\\',
-        "Medoo": r'\b(?:use\s+)?Medoo\\',
-        "Atlas ORM": r'\b(?:use\s+)?Atlas\\ORM\\',
-        "DBAL": r'\b(?:use\s+)?Doctrine\\DBAL\\',
-        "AURA SQL": r'\b(?:use\s+)?Aura\\Sql\\',
-        "CakePHP ORM": r'\b(?:use\s+)?Cake\\ORM\\',
-        "FuelPHP ORM": r'\b(?:use\s+)?Fuel\\Core\\DB|\bOrm_',
-        "Zend DB": r'\b(?:use\s+)?(?:Laminas|Zend)\\Db\\',
-        "MongoDB": r'\b(?:use\s+)?MongoDB\\',
-        "CouchDB": r'\bcouchdb\b|\bCouchRest\b',
-        "Redis (phpredis)": r'\b(?:Redis|Predis)\b',
-        "Memcache": r'\bMemcache(?:d)?\b',
-        "Cassandra": r'\bDatastax\\|\bCassandra\\',
-        "ScyllaDB": r'\bDatastax\\php-driver\b|\bCassandra\\',
-        "Neo4J": r'\bNeo4j\b|graphaware\\neo4j-php-client',
-        "Gremlin-PHP": r'pomm-project\\foundation|\bGremlin\b',
-        "InfluxDB": r'\bInfluxDB\\',
-        "Berkeley DB": r'\bDB4PHP\b',
-        "LevelDB": r'\bLevelDB\b',
-        "LMDB": r'\bLMDB\b',
-        "GDBM": r'\bGDBM\b',
-        "SOAP": r'\bSoapClient\b',
-        "XML-RPC": r'\bxmlrpc_(?:encode_request|server_call_method)\b',
-        "GraphQL": r'\bGraphQL\\(?:Query|Mutation)\b',
+        "RawSQL": r'mysql_query|mysqli|pg_query|pgsql|sqlite|sqlsrv|oci8|ibm_db2|interbase|odbc|PDO',
+        "Doctrine ORM": r'Doctrine\\ORM',
+        "Eloquent (Illuminate)": r'Illuminate\\Database',
+        "Propel ORM": r'Propel',
+        "Cycle ORM": r'cycle\\orm',
+        "RedBeanPHP": r'redbeanphp\\rb',
+        "Idiorm": r'j4mie\\idiorm',
+        "Paris": r'j4mie\\paris',
+        "Medoo": r'catfan\\medoo',
+        "Atlas ORM": r'atlas\\orm',
+        "DBAL": r'doctrine\\dbal',
+        "AURA SQL": r'aura\\sql',
+        "CakePHP ORM": r'cakephp\\orm',
+        "FuelPHP ORM": r'fuelphp\\orm',
+        "Zend DB": r'laminas\\laminas-db',
+        "MongoDB": r'mongodb\\mongodb',
+        "CouchDB": r'couchdb',
+        "Redis (phpredis)": r'redis|predis',
+        "Memcache": r'memcache',
+        "Cassandra": r'datastax\\php-driver',
+        "ScyllaDB": r'datastax\\php-driver|cassandra',
+        "Neo4J": r'graphaware\\neo4j-php-client|Neo4j',
+        "Gremlin-PHP": r'pomm-project\\foundation',
+        "InfluxDB": r'influxdb\\influxdb-php',
+        "Berkeley DB": r'DB4PHP',
+        "LevelDB": r'LevelDB',
+        "LMDB": r'LMDB',
+        "GDBM": r'GDBM',
+        "SOAP": r'SoapClient',
+        "XML-RPC": r'xmlrpc_encode_request|xmlrpc_server_call_method',
+        "GraphQL": r'GraphQL\\Query|GraphQL\\Mutation',
     },
     "python": {
-        "RawSQL": r'\b(?:import|from)\s+(?:sqlite3|psycopg2|MySQLdb|pymysql|cx_Oracle|pyodbc|ibm_db|mysql\.connector|asyncpg|pymssql|mariadb|fdb)\b',
-        "SQLAlchemy": r'\b(?:import|from)\s+(?:sqlalchemy|flask_sqlalchemy)\b',
-        "Django ORM": r'\b(?:from\s+django\.db\s+import\s+models|import\s+django\.db)\b',
-        "PonyORM": r'\b(?:import|from)\s+pony\.orm\b',
-        "Tortoise-ORM": r'\b(?:import|from)\s+tortoise\b',
-        "Peewee": r'\b(?:import|from)\s+peewee\b',
-        "Orator": r'\b(?:import|from)\s+orator\b',
-        "Dataset": r'\b(?:import|from)\s+dataset\b',
-        "SQLObject": r'\b(?:import|from)\s+sqlobject\b',
-        "MongoDB": r'\b(?:import|from)\s+(?:pymongo|mongoengine)\b',
-        "CouchDB": r'\b(?:import|from)\s+couchdb\b',
-        "Redis": r'\b(?:import|from)\s+(?:redis|aioredis|django_redis|simplekv)\b',
-        "Cassandra": r'\b(?:import|from)\s+cassandra\b',
-        "ScyllaDB": r'\b(?:import|from)\s+cassandra\b',
-        "HBase": r'\b(?:import|from)\s+happybase\b',
-        "Neo4J": r'\b(?:import|from)\s+(?:neo4j|py2neo)\b',
-        "Gremlin": r'\b(?:import|from)\s+gremlin_python\b',
-        "InfluxDB": r'\b(?:import|from)\s+influxdb\b',
-        "OpenTSDB": r'\b(?:import|from)\s+opentsdb\b',
-        "BerkeleyDB": r'\b(?:import|from)\s+bsddb3\b',
-        "LevelDB": r'\b(?:import|from)\s+plyvel\b',
-        "LMDB": r'\b(?:import|from)\s+lmdb\b',
-        "GDBM": r'\b(?:import|from)\s+dbm\.gnu\b',
-        "TDB": r'\b(?:import|from)\s+tdb\b',
-        "PStore": r'\b(?:import|from)\s+shelve\b',
+        "RawSQL": r'import sqlite3|from sqlite3|import psycopg2|from psycopg2|import MySQLdb|from MySQLdb|import pymysql|from pymysql|import cx_Oracle|from cx_Oracle|import pyodbc|from pyodbc|import ibm_db|from ibm_db|import mysql.connector|from mysql.connector|import asyncpg|from asyncpg|import pymssql|from pymssql|import mariadb|from mariadb|import fdb|from fdb',
+        "SQLAlchemy": r'import sqlalchemy|from sqlalchemy|import flask_sqlalchemy|from flask_sqlalchemy',
+        "Django ORM": r'from django.db import models|import django.db',
+        "PonyORM": r'import pony.orm|from pony.orm',
+        "Tortoise-ORM": r'import tortoise|from tortoise',
+        "Peewee": r'import peewee|from peewee',
+        "Orator": r'import orator|from orator',
+        "Dataset": r'import dataset|from dataset',
+        "SQLObject": r'import sqlobject|from sqlobject',
+        "MongoDB": r'import pymongo|from pymongo|import mongoengine|from mongoengine',
+        "CouchDB": r'import couchdb|from couchdb',
+        "Redis": r'import redis|from redis|import aioredis|from aioredis|import django_redis|from django_redis|import simplekv|from simplekv',
+        "Cassandra": r'import cassandra|from cassandra',
+        "ScyllaDB": r'import cassandra|from cassandra',
+        "HBase": r'import happybase|from happybase',
+        "Neo4J": r'import neo4j|from neo4j|import py2neo|from py2neo',
+        "Gremlin": r'import gremlin_python|from gremlin_python',
+        "InfluxDB": r'import influxdb|from influxdb',
+        "OpenTSDB": r'import opentsdb|from opentsdb',
+        "BerkeleyDB": r'import bsddb3|from bsddb3',
+        "LevelDB": r'import plyvel|from plyvel',
+        "LMDB": r'import lmdb|from lmdb',
+        "GDBM": r'import dbm.gnu|from dbm.gnu',
+        "TDB": r'import tdb|from tdb',
+        "PStore": r'import shelve|from shelve',
     },
     "ruby": {
-        "RawSQL": r'\b(?:require|gem)\s*[\("\']+(?:sqlite3|pg|mysql2|oci8|tiny_tds|ibm_db|fb|odbc)[\)"\']|\bPG::Connection\b',
-        "Ruby on Rails": r'\bRails\b|(?:require|gem)\s*[\("\']+rails[\)"\']',
-        "ActiveRecord": r'\bActiveRecord\b|(?:require|gem)\s*[\("\']+active_record[\)"\']',
-        "Sequel": r'\bSequel\b|(?:require|gem)\s*[\("\']+sequel[\)"\']',
-        "ROM.rb": r'\bROM\b|(?:require|gem)\s*[\("\']+(?:rom|rom-sql)[\)"\']',
-        "DataMapper": r'\bDataMapper\b|(?:require|gem)\s*[\("\']+data_mapper[\)"\']',
-        "Hanami::Model": r'\bHanami::Model\b|(?:require|gem)\s*[\("\']+hanami/model[\)"\']',
-        "Trailblazer::Reform": r'\bReform\b|(?:require|gem)\s*[\("\']+reform[\)"\']',
-        "Arel": r'\bArel\b|(?:require|gem)\s*[\("\']+arel[\)"\']',
-        "MongoDB": r'\bMongo(?:id|::Client)?\b|(?:require|gem)\s*[\("\']+(?:mongo|mongoid)[\)"\']',
-        "CouchDB": r'(?:require|gem)\s*[\("\']+couchrest[\)"\']',
-        "Redis": r'\bRedis\b|(?:require|gem)\s*[\("\']+(?:redis|redic|ohm|moneta)[\)"\']',
-        "Cassandra": r'\bCassandra\b|(?:require|gem)\s*[\("\']+cassandra[\)"\']',
-        "HBase": r'(?:require|gem)\s*[\("\']+hbase[\)"\']',
-        "Neo4j": r'\bNeo4j\b|(?:require|gem)\s*[\("\']+neo4j[\)"\']',
-        "Gremlin.rb": r'(?:require|gem)\s*[\("\']+gremlin[\)"\']',
-        "InfluxDB": r'\bInfluxDB\b|(?:require|gem)\s*[\("\']+influxdb[\)"\']',
-        "LevelDB": r'\bLevelDB\b|(?:require|gem)\s*[\("\']+leveldb[\)"\']',
-        "LMDB": r'\bLMDB\b|(?:require|gem)\s*[\("\']+lmdb[\)"\']',
-        "GDBM": r'\bGDBM\b|(?:require|gem)\s*[\("\']+gdbm[\)"\']',
-        "TDB": r'(?:require|gem)\s*[\("\']+tdb[\)"\']',
-        "PStore": r'\bPStore\b|(?:require|gem)\s*[\("\']+pstore[\)"\']',
+        "RawSQL": r'\b(?:require|gem)\s*[("\']+(?:sqlite3|pg|mysql2|oci8|tiny_tds|ibm_db|fb|odbc)[)"\']|\bPG::Connection\b',
+        "Ruby on Rails": r'\bRails\b|(?:require|gem)\s*[("\']+rails[)"\']',
+        "ActiveRecord": r'\bActiveRecord\b|(?:require|gem)\s*[("\']+active_record[)"\']',
+        "Sequel": r'\bSequel\b|(?:require|gem)\s*[("\']+sequel[)"\']',
+        "ROM.rb": r'\bROM\b|(?:require|gem)\s*[("\']+(?:rom|rom-sql)[)"\']',
+        "DataMapper": r'\bDataMapper\b|(?:require|gem)\s*[("\']+data_mapper[)"\']',
+        "Hanami::Model": r'\bHanami::Model\b|(?:require|gem)\s*[("\']+hanami/model[)"\']',
+        "Trailblazer::Reform": r'\bReform\b|(?:require|gem)\s*[("\']+reform[)"\']',
+        "Arel": r'\bArel\b|(?:require|gem)\s*[("\']+arel[)"\']',
+        "MongoDB": r'\bMongo(?:id|::Client)?\b|(?:require|gem)\s*[("\']+(?:mongo|mongoid)[)"\']',
+        "CouchDB": r'(?:require|gem)\s*[("\']+couchrest[)"\']',
+        "Redis": r'\bRedis\b|(?:require|gem)\s*[("\']+(?:redis|redic|ohm|moneta)[)"\']',
+        "Cassandra": r'\bCassandra\b|(?:require|gem)\s*[("\']+cassandra[)"\']',
+        "HBase": r'(?:require|gem)\s*[("\']+hbase[)"\']',
+        "Neo4j": r'\bNeo4j\b|(?:require|gem)\s*[("\']+neo4j[)"\']',
+        "Gremlin.rb": r'(?:require|gem)\s*[("\']+gremlin[)"\']',
+        "InfluxDB": r'\bInfluxDB\b|(?:require|gem)\s*[("\']+influxdb[)"\']',
+        "LevelDB": r'\bLevelDB\b|(?:require|gem)\s*[("\']+leveldb[)"\']',
+        "LMDB": r'\bLMDB\b|(?:require|gem)\s*[("\']+lmdb[)"\']',
+        "GDBM": r'\bGDBM\b|(?:require|gem)\s*[("\']+gdbm[)"\']',
+        "TDB": r'(?:require|gem)\s*[("\']+tdb[)"\']',
+        "PStore": r'\bPStore\b|(?:require|gem)\s*[("\']+pstore[)"\']',
     },
 }
 
-ALIASES = {
-    "c": "c",
-    "cpp": "cpp",
-    "c++": "cpp",
-    "csharp": "csharp",
-    "c#": "csharp",
-    "cs": "csharp",
-    "go": "go",
-    "java": "java",
-    "javascript": "javascript",
-    "js": "javascript",
-    "ts": "javascript",
-    "php": "php",
-    "python": "python",
-    "py": "python",
-    "ruby": "ruby",
-    "rb": "ruby",
-}
-
-HF_LANGUAGE_NAMES = {
-    "c": "C",
-    "cpp": "C++",
-    "csharp": "C#",
-    "go": "GO",
-    "java": "Java",
-    "javascript": "JavaScript",
-    "php": "PHP",
-    "python": "Python",
-    "ruby": "Ruby",
+EXTENSIONS: Dict[str, Tuple[str, ...]] = {
+    "c": (".c", ".h"),
+    "cpp": (".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"),
+    "csharp": (".cs",),
+    "go": (".go",),
+    "java": (".java",),
+    "javascript": (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"),
+    "php": (".php",),
+    "python": (".py",),
+    "ruby": (".rb",),
 }
 
 TOTALS = {
-    "c": 1328934,
-    "cpp": 7380520,
-    "csharp": 6811652,
-    "go": 2265436,
-    "java": 19548190,
-    "javascript": 11839883,
-    "php": 11177610,
-    "python": 7226626,
+    "c": 2286711,
+    "cpp": 7289750,
+    "csharp": 6650395,
+    "go": 5498422,
+    "java": 12090508,
+    "javascript": 28578134,
+    "php": 8637557,
+    "python": 16218668,
     "ruby": 4473331,
+}
+
+ALIASES = {
+    "c#": "csharp",
+    "cs": "csharp",
+    "csharp": "csharp",
+    "c++": "cpp",
+    "cpp": "cpp",
+    "js": "javascript",
+    "javascript": "javascript",
+    "ts": "javascript",
+    "py": "python",
+    "python": "python",
+    "rb": "ruby",
+    "ruby": "ruby",
+    "php": "php",
+    "java": "java",
+    "go": "go",
+    "c": "c",
 }
 
 
 def canonical_language(name: str) -> str:
     key = name.strip().lower()
     if key not in ALIASES:
-        valid = ", ".join(sorted(ALIASES))
+        valid = ", ".join(sorted(set(ALIASES)))
         raise ValueError(f"Unsupported language '{name}'. Supported values: {valid}")
     return ALIASES[key]
 
 
-def compile_patterns(language: str) -> Dict[str, Pattern[str]]:
-    return {name: re.compile(pattern, re.MULTILINE) for name, pattern in PATTERNS[language].items()}
+def compile_patterns(language: str) -> List[Tuple[str, Pattern[str]]]:
+    return [(pattern_name, re.compile(pattern)) for pattern_name, pattern in PATTERNS[language].items()]
 
 
-def ensure_csv(path: Path, fieldnames: list[str]) -> None:
-    if not path.exists():
-        with path.open("w", newline="", encoding="utf-8") as csv_file:
-            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-            writer.writeheader()
+def ensure_csv_header(csv_file_path: str, method_names: Iterable[str]) -> None:
+    if Path(csv_file_path).exists():
+        return
+    fieldnames = ["repo_name", "num_files", "languages"] + list(method_names)
+    with open(csv_file_path, mode="w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
 
 
-def write_all_repo_data(csv_path: Path, patterns: Dict[str, str], repo_info: dict[str, dict[str, object]]) -> None:
+def write_all_repo_data(csv_file_path: str, method_names: Sequence[str], repo_info: Dict[str, Dict[str, object]]) -> None:
     if not repo_info:
         return
-    fieldnames = ["repo_name", "num_files", "languages"] + list(patterns.keys())
-    with csv_path.open("a", newline="", encoding="utf-8") as csv_file:
+
+    fieldnames = ["repo_name", "num_files", "languages"] + list(method_names)
+    with open(csv_file_path, mode="a", newline="", encoding="utf-8") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         for repo_name, info in repo_info.items():
-            if any(int(info[method]) > 0 for method in patterns):
+            if any(int(info[method]) > 0 for method in method_names):
                 writer.writerow({
                     "repo_name": repo_name,
                     "num_files": info["num_files"],
                     "languages": ", ".join(sorted(info["languages"])),
-                    **{method: info[method] for method in patterns},
+                    **{method: info[method] for method in method_names},
                 })
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Analyze local github-code parquet files for DB/query library usage by language.")
-    parser.add_argument("language", help="Language to analyze, e.g. ruby, python, c++, c#")
-    parser.add_argument(
-        "--data-files",
-        default="data/train-0*-of-01126.parquet",
-        help="Local parquet glob or path passed to datasets.load_dataset (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--output",
-        default=None,
-        help="Output CSV path. Defaults to <language>.csv",
-    )
-    parser.add_argument(
-        "--num-proc",
-        type=int,
-        default=24,
-        help="Number of worker processes for local dataset loading (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--flush-repos",
-        type=int,
-        default=1000,
-        help="Write partial results after this many repos are buffered (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--total",
-        type=int,
-        default=None,
-        help="Override expected total file count shown in progress output",
-    )
-    return parser.parse_args()
+def iter_parquet_files(pattern: str) -> List[str]:
+    return sorted([match for match in glob.glob(pattern) if Path(match).is_file()])
+
+
+def path_matches_language(path_value: str, extensions: Tuple[str, ...]) -> bool:
+    lower = path_value.lower()
+    return lower.endswith(tuple(ext.lower() for ext in extensions))
 
 
 def main() -> int:
-    args = parse_args()
+    parser = argparse.ArgumentParser(description="Scan local github-code parquet files using d4-source regex patterns.")
+    parser.add_argument("language", help="Language name, e.g. ruby, python, c++")
+    parser.add_argument("--data-files", default="data/train-0*-of-01126.parquet", help="Glob for local parquet files")
+    parser.add_argument("--flush-repos", type=int, default=1000, help="Flush CSV after this many repos are buffered")
+    parser.add_argument("--total", type=int, default=None, help="Expected total file count for progress reporting")
+    parser.add_argument("--progress-every", type=int, default=10000, help="Print progress every N matching source files")
+    parser.add_argument("--batch-size", type=int, default=8192, help="Arrow batch size")
+    args = parser.parse_args()
 
     try:
         language = canonical_language(args.language)
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
-        return 2
+        return 1
 
-    output_path = Path(args.output) if args.output else Path(f"{language}.csv")
-    fieldnames = ["repo_name", "num_files", "languages"] + list(PATTERNS[language].keys())
-    ensure_csv(output_path, fieldnames)
+    parquet_files = iter_parquet_files(args.data_files)
+    if not parquet_files:
+        print(f"Error: no parquet files matched: {args.data_files}", file=sys.stderr)
+        return 1
 
     compiled_patterns = compile_patterns(language)
-    hf_language = HF_LANGUAGE_NAMES[language]
+    extensions = EXTENSIONS[language]
+    csv_file_path = f"{language}.csv"
+    method_names = [name for name, _ in compiled_patterns]
+    ensure_csv_header(csv_file_path, method_names)
+
     total = args.total if args.total is not None else TOTALS.get(language)
-
-    repo_info: dict[str, dict[str, object]] = {}
+    repo_info: Dict[str, Dict[str, object]] = {}
     count = 0
-    job_start_time = dt.datetime.now()
-    loop_start_time = dt.datetime.now()
+    job_start_time = datetime.datetime.now()
+    loop_start_time = datetime.datetime.now()
 
-    dataset = load_dataset(
-        "parquet",
-        data_files={"train": args.data_files},
-        split="train",
-        num_proc=args.num_proc,
-    )
-
-    for obj in dataset:
-        repo_name = obj["repo_name"]
-        lang_value = obj["language"]
-        if lang_value != hf_language:
-            continue
-        code = obj.get("code") or ""
-
-        info = repo_info.setdefault(
-            repo_name,
-            {"num_files": 0, "languages": set(), **{method: 0 for method in PATTERNS[language]}},
+    dataset = ds.dataset(parquet_files, format="parquet")
+    schema_names = set(dataset.schema.names)
+    required = {"repo_name", "path", "content"}
+    if not required.issubset(schema_names):
+        print(
+            f"Error: parquet schema is missing required columns. Found: {sorted(schema_names)}",
+            file=sys.stderr,
         )
-        info["num_files"] += 1
-        info["languages"].add(lang_value)
+        return 1
 
-        for method, cre in compiled_patterns.items():
-            info[method] += len(cre.findall(code))
+    scanner = dataset.scanner(columns=["repo_name", "path", "content"], batch_size=args.batch_size)
 
-        if len(repo_info) >= args.flush_repos:
-            write_all_repo_data(output_path, PATTERNS[language], repo_info)
-            repo_info.clear()
+    for batch in scanner.to_batches():
+        columns = batch.to_pydict()
+        repo_names = columns["repo_name"]
+        paths = columns["path"]
+        contents = columns["content"]
 
-        count += 1
-        if count % 10000 == 0:
-            loop_end_time = dt.datetime.now()
-            loop_duration = loop_end_time - loop_start_time
-            formatted_duration = f"{loop_duration.total_seconds():.2f}"
-            if total is not None:
-                left = f"{max(total - count, 0):,}"
-                per = round(100 - count / total * 100, 2)
-                print(
-                    f"STAT: {left} files left ({per}%). Running for {dt.datetime.now() - job_start_time}.",
-                    end=" ",
-                )
-            else:
-                print(f"STAT: Processed {count:,} files. Running for {dt.datetime.now() - job_start_time}.", end=" ")
-            print(f"This loop took {formatted_duration} seconds.")
-            loop_start_time = dt.datetime.now()
+        for repo_name, path_value, content in zip(repo_names, paths, contents):
+            if repo_name is None or path_value is None or content is None:
+                continue
+            if not path_matches_language(str(path_value), extensions):
+                continue
 
-    write_all_repo_data(output_path, PATTERNS[language], repo_info)
-    print("END: Data has been written to", output_path, "incrementally.")
+            repo_name = str(repo_name)
+            if repo_name not in repo_info:
+                repo_info[repo_name] = {
+                    "num_files": 0,
+                    "languages": {language},
+                    **{method: 0 for method, _ in compiled_patterns},
+                }
+
+            info = repo_info[repo_name]
+            info["num_files"] += 1
+            info["languages"].add(language)
+
+            text = str(content)
+            for method, cre in compiled_patterns:
+                info[method] += len(cre.findall(text))
+
+            count += 1
+            if len(repo_info) >= args.flush_repos:
+                write_all_repo_data(csv_file_path, method_names, repo_info)
+                repo_info.clear()
+
+            if args.progress_every > 0 and count % args.progress_every == 0:
+                loop_end_time = datetime.datetime.now()
+                loop_duration = loop_end_time - loop_start_time
+                formatted_duration = f"{loop_duration.total_seconds():.2f}"
+                if total:
+                    left = f"{max(total - count, 0):,}"
+                    per = round(100 - count / total * 100, 2)
+                    print(
+                        f"STAT: {left} files left ({per}%). Running for {datetime.datetime.now() - job_start_time}.",
+                        end=" ",
+                    )
+                else:
+                    print(f"STAT: {count:,} matching source files scanned. Running for {datetime.datetime.now() - job_start_time}.", end=" ")
+                print(f"This loop took {formatted_duration} seconds.")
+                loop_start_time = datetime.datetime.now()
+
+    write_all_repo_data(csv_file_path, method_names, repo_info)
+    print(f"END: Data has been written to {csv_file_path} incrementally.")
     return 0
 
 
