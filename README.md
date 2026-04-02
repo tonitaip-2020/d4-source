@@ -60,15 +60,3 @@ python .\analyze.py ruby
 ```
 
 4. Results are saved in a .csv file.
-
-## Script execution times (minutes)
-
-- C:            29
-- C#:           20
-- C++:          15
-- Go:           17
-- Java:         64
-- JavaScript:   31
-- PHP:          39
-- Python:       103
-- Ruby:         9
