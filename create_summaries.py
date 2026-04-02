@@ -114,6 +114,10 @@ def analyze_language(csv_path: Path) -> Dict:
     eligible_df = df.loc[has_any_method].copy()
     total_with_any_method = len(eligible_df)
 
+    total_repositories = len(df)
+    total_files = int(df["num_files"].fillna(0).sum())
+    eligible_files = int(eligible_df["num_files"].fillna(0).sum())
+
     counts = {}
     for method in method_cols:
         counts[method] = int(eligible_df[method].sum())
@@ -132,14 +136,15 @@ def analyze_language(csv_path: Path) -> Dict:
             }
         )
 
-    # Sort by descending count, then descending proportion, then name
     rows.sort(key=lambda x: (-x["count"], -x["proportion"], x["method"].lower()))
 
     return {
         "language": language_label_from_filename(csv_path.name),
         "filename": csv_path.name,
-        "n_total_rows": len(df),
+        "n_total_rows": total_repositories,
+        "n_total_files": total_files,
         "n_with_any_method": total_with_any_method,
+        "n_files_with_any_method": eligible_files,
         "methods": rows,
     }
 
