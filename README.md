@@ -4,7 +4,7 @@ Analyzes source code files for data access methods, i.e., how software applicati
 
 ## Contents of this repository:
 
-- `analysis_*.py` = files for analyzing the repositories of different languages.
+- `analyze.py` = for analyzing the repositories of different languages.
 - `create_summary.py` = for summarizing the .csv outputs.
 - `summary.txt` = data summaries output by `create_summaries.py`.
 - (raw analysis data are not included due to their size)
@@ -12,8 +12,69 @@ Analyzes source code files for data access methods, i.e., how software applicati
 ## Usage
 
 1. Acquire the dataset at https://huggingface.co/datasets/codeparrot/github-code (downloading the dataset is the preferred method in the files of this repository, but you can also use a data stream to save space and bandwidth, as the dataset is several hundred GBs).
-2. Run the .py file(s) depending on which language's data access methods you want to analyze.
-3. Results are saved in a .csv file.
+
+In Powershell:
+
+```
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install datasets huggingface_hub
+```
+
+If PowerShell blocks activation on Windows, use a process-scoped execution policy change for just the current shell session:
+
+```
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+```
+
+Download the Parquet files:
+
+```
+@'
+from huggingface_hub import snapshot_download
+
+snapshot_download(
+    repo_id="codeparrot/github-code",
+    repo_type="dataset",
+    local_dir=".",
+    allow_patterns=["data/train-0*-of-01126.parquet"],
+)
+'@ | python -
+```
+
+Warm the cache (once):
+
+```
+@'
+from datasets import load_dataset
+
+ds = load_dataset(
+    "codeparrot/github-code",
+    data_files={"train": "data/train-0*-of-01126.parquet"},
+    split="train[:1]",
+)
+print(ds[0]["repo_name"])
+'@ | python -
+```
+
+   
+3. Run the analyze.py with parameters depending on which language's data access methods you want to analyze.
+
+If you downloaded the files (step #2 above), run:
+
+```
+$env:HF_DATASETS_OFFLINE = "1"
+```
+
+Run the script for the language you want to, e.g.:
+
+```
+python .\analyze.py ruby
+```
+
+4. Results are saved in a .csv file.
 
 ## Script execution times (minutes)
 
