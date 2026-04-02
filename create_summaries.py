@@ -17,7 +17,7 @@ LANGUAGE_FILE_ORDER = [
     "ruby.csv",
     "python.csv",
     "javascript.csv",
-    "c#.csv",
+    "csharp.csv",
 ]
 
 
