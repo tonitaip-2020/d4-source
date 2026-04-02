@@ -152,7 +152,10 @@ def emit_comment_block(lang_result: Dict) -> str:
             continue
         pct_int = round(100.0 * row["proportion"])
         lines.append(f"% {row['method']}, {row['count']}, {pct_int}%")
-    lines.append(f"% total: {lang_result['n_with_any_method']}")
+    lines.append(f"% total repositories: {lang_result['n_total_rows']}")
+    lines.append(f"% total files: {lang_result['n_total_files']}")
+    lines.append(f"% repositories with any method: {lang_result['n_with_any_method']}")
+    lines.append(f"% files in repositories with any method: {lang_result['n_files_with_any_method']}")
     return "\n".join(lines)
 
 
