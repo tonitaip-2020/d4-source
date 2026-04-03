@@ -286,15 +286,16 @@ EXTENSIONS: Dict[str, Tuple[str, ...]] = {
     "ruby": (".rb",),
 }
 
+# These are for the progress bar:
 TOTALS = {
-    "c": 2286711,
-    "cpp": 7289750,
-    "csharp": 6650395,
-    "go": 5498422,
-    "java": 12090508,
-    "javascript": 28578134,
-    "php": 8637557,
-    "python": 16218668,
+    "c": 14143113,
+    "cpp": 7380520,
+    "csharp": 6811652,
+    "go": 2265436,
+    "java": 19548190,
+    "javascript": 11839883,
+    "php": 11177610,
+    "python": 7226626,
     "ruby": 4473331,
 }
 
