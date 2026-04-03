@@ -55,6 +55,8 @@ $env:HF_DATASETS_OFFLINE = "1"
 
 Run the script for the language you want to. This will directly scan the Parquet files. A faster method (some 2x) is to warm up the cache and use Arrow files, but this will require approximately 700 GB additional disk space.
 
+Available parameters are: `c`, `cpp`, `csharp`, `ruby`, `java`, `javascript`, `python`, `php`, and `go`, e.g.:
+
 ```
 python .\analyze.py ruby
 ```
