@@ -11,7 +11,7 @@ Analyzes source code files for data access methods, i.e., how software applicati
 
 ## Usage
 
-1. Acquire the dataset at https://huggingface.co/datasets/codeparrot/github-code (downloading the dataset is the preferred method in the files of this repository, but you can also use a data stream to save space and bandwidth, as the dataset is several hundred GBs).
+1. Acquire the dataset at https://huggingface.co/datasets/codeparrot/github-code (downloading the dataset is the preferred method in the files of this repository, but you can also use a data stream to save space and bandwidth). The Parquet files take approximately 340 GB disk space.
 
 In Powershell:
 
@@ -45,23 +45,23 @@ snapshot_download(
 ```
 
    
-3. Run the analyze.py with parameters depending on which language's data access methods you want to analyze.
+2. Run the analyze.py with parameters depending on which language's data access methods you want to analyze.
 
-If you downloaded the files (step #2 above), run:
+If you downloaded the files, run:
 
 ```
 $env:HF_DATASETS_OFFLINE = "1"
 ```
 
-Run the script for the language you want to, e.g. (this will scan the Parquet files, and not create Arrow files to save disk space):
+Run the script for the language you want to. This will directly scan the Parquet files. A faster method (some 2x) is to warm up the cache and use Arrow files, but this will require approximately 700 GB additional disk space.
 
 ```
 python .\analyze.py ruby
 ```
 
-4. Results are saved in a .csv file.
+3. Results are saved in a .csv file.
 
-5. Run create_summaries to generate summaries from the .csv file(s):
+4. Run create_summaries to generate summaries from the .csv file(s):
 
 ```
 python .\create_summaries.py .
